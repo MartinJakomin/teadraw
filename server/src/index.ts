@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import http from "http";
+import path from "path";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import type { Player } from "./gameTypes.js";
@@ -52,6 +53,12 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
 const app = express();
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+const __dirname = path.resolve();
+app.use(express.static(path.join(__dirname, "../client/dist")));
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {
