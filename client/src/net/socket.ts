@@ -12,7 +12,16 @@ export type ClientToServerEvents = {
   "clue:submit": (payload: { roomCode: string; playerId: string; text: string }, ack?: (resp: any) => void) => void;
   "vote:cast": (payload: { roomCode: string; playerId: string; optionId: string }, ack?: (resp: any) => void) => void;
   "reveal:next": (payload: { roomCode: string; playerId: string }, ack?: (resp: any) => void) => void;
+  "room:updateSettings": (payload: { roomCode: string; playerId: string } & Record<string, any>) => void;
+  "avatar:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string; color: string; }) => void;
+  "fake:category:submit": (payload: { roomCode: string; playerId: string; category: string; word: string; }) => void;
+  "fake:draw:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string; }) => void;
+  "fake:accuse:vote": (payload: { roomCode: string; playerId: string; targetId: string; }) => void;
+  "fake:votes:continue": (payload: { roomCode: string; playerId: string; }) => void;
+  "fake:guess:submit": (payload: { roomCode: string; playerId: string; guess: string; }) => void;
+  "room:stop": (payload: { roomCode: string; playerId: string; }) => void;
 };
+
 
 export type ServerToClientEvents = {
   "room:state": (state: RoomState) => void;
@@ -27,4 +36,3 @@ export function getSocket() {
   }
   return socket;
 }
-

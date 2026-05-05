@@ -1,18 +1,18 @@
 export type PlayerId = string;
 
-export type Phase = 
-  | "lobby" 
-  | "avatar" 
-  | "draw" 
-  | "submit" 
-  | "vote" 
-  | "reveal" 
-  | "game_over" 
-  | "category" 
-  | "draw_shared" 
-  | "accuse" 
+export type Phase =
+  | "lobby"
+  | "avatar"
+  | "draw"
+  | "submit"
+  | "vote"
+  | "reveal"
+  | "game_over"
+  | "category"
+  | "draw_shared"
+  | "accuse"
   | "fake_votes"
-  | "guess" 
+  | "guess"
   | "reveal_fake";
 
 export type Reveal = {
@@ -60,5 +60,7 @@ export type RoomState = {
     votedForId?: Record<PlayerId, PlayerId>;
     isFakeArtistCaught?: boolean;
     fakeArtistGuess?: string;
+    winner?: "fake" | "artists";
+    pointsDeltaByPlayer?: Record<string, number>;
   };
 };

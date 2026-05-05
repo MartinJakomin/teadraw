@@ -72,7 +72,7 @@ export function RevealScreen(props: {
                   const authorId = o.authorId;
                   const isReal = !authorId;
                   const authorName = authorId === "system" ? "System" : (authorId ? nameById.get(authorId) : null);
-                  const authorColor = authorId ? colorById.get(authorId) : null;
+                  const authorColor = authorId ? colorById.get(authorId) : undefined;
                   const voters = o.votes.map((id) => nameById.get(id) ?? "???").join(", ");
 
                   return (

@@ -505,7 +505,8 @@ export function scoreAndReveal(room: Room) {
     prompt: cur.prompt,
     imageDataUrl: cur.imageDataUrl,
     options: optionVotes,
-    pointsDeltaByPlayer
+    pointsDeltaByPlayer,
+    totalDrawings: room.drawings.length
   };
   room.phase = "reveal";
 }
