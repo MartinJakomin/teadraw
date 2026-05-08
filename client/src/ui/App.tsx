@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RoomState } from "../types";
 import { getSocket } from "../net/socket";
 import { DrawScreen } from "./screens/DrawScreen";
@@ -61,6 +61,24 @@ export function App() {
   const [playerId, setPlayerId] = useState(() => load(LS.playerId));
   const [prompt, setPrompt] = useState(() => load(LS.prompt));
   const [error, setError] = useState<string>("");
+  const [socketConnected, setSocketConnected] = useState(socket.connected);
+
+  // Use refs so the reconnect handler always sees current values
+  const roomCodeRef = useRef(roomCode);
+  const playerIdRef = useRef(playerId);
+  const nameRef = useRef(name);
+  const roomRef = useRef(room);
+  useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
+  useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
+  useEffect(() => { nameRef.current = name; }, [name]);
+  useEffect(() => { roomRef.current = room; }, [room]);
+
+  // Reset to home screen when room is gone (e.g. server restarted)
+  const resetToHome = useCallback(() => {
+    setRoom(null);
+    setError("");
+    lastPhase.current = null;
+  }, []);
 
   useEffect(() => {
     const onState = (s: RoomState) => setRoom(s);
@@ -69,13 +87,37 @@ export function App() {
       save(LS.prompt, p);
     };
 
+    const onConnect = () => {
+      setSocketConnected(true);
+      // Auto-rejoin room if we were in one before disconnect
+      const code = roomCodeRef.current;
+      const pid = playerIdRef.current;
+      const n = nameRef.current;
+      if (code && pid && roomRef.current) {
+        socket.emit("room:join", { roomCode: code, name: n, playerId: pid }, (resp: any) => {
+          if (!resp?.ok) {
+            // Room no longer exists (server restarted) → reset to home
+            resetToHome();
+          }
+        });
+      }
+    };
+
+    const onDisconnect = () => {
+      setSocketConnected(false);
+    };
+
     socket.on("room:state", onState);
     socket.on("prompt:you", onPrompt);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
     return () => {
       socket.off("room:state", onState);
       socket.off("prompt:you", onPrompt);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
     };
-  }, [socket]);
+  }, [socket, resetToHome]);
 
   useEffect(() => {
     save(LS.name, name);
@@ -311,6 +353,15 @@ export function App() {
 
   return (
     <div className="layout-split">
+      {/* Disconnection overlay */}
+      {!socketConnected && room && (
+        <div className="disconnect-overlay">
+          <div className="disconnect-banner">
+            <div className="disconnect-spinner" />
+            <span>Connection lost — reconnecting…</span>
+          </div>
+        </div>
+      )}
       <div className="layout-main">
         {renderScreen()}
       </div>

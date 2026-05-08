@@ -11,7 +11,8 @@ export function VoteScreen(props: {
   const already = useMemo(() => props.vote.votedBy.includes(props.me.id), [props.me.id, props.vote.votedBy]);
   const [picked, setPicked] = useState<string>("");
 
-  const drawerName = props.room.players.find((p) => p.id === props.vote.drawerId)?.name ?? "Someone";
+  const drawer = props.room.players.find((p) => p.id === props.vote.drawerId);
+  const drawerName = drawer?.name ?? "Someone";
 
   return (
     <div className="page">
@@ -23,7 +24,12 @@ export function VoteScreen(props: {
           </div>
         </div>
 
-        <div style={{ marginBottom: "2rem" }} />
+        <div className="drawer-info" style={{ display: "flex", alignItems: "center", gap: "12px", margin: "1.2rem 0" }}>
+          {drawer?.avatarUrl && (
+            <img src={drawer.avatarUrl} alt="drawer" className="avatar-small" style={{ border: `2px solid ${drawer.color}` }} />
+          )}
+          <div className="muted">Drawing {props.vote.drawingIndex + 1} of {props.vote.totalDrawings} by <b style={{ color: drawer?.color }}>{drawerName}</b></div>
+        </div>
 
         <img className="img" src={props.vote.imageDataUrl} alt="drawing" />
 

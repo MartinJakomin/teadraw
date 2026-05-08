@@ -13,7 +13,8 @@ export function SubmitScreen(props: {
 
   const isDrawer = props.submit.drawerId === props.me.id;
   const already = useMemo(() => props.submit.submittedBy.includes(props.me.id), [props.me.id, props.submit.submittedBy]);
-  const drawerName = props.room.players.find((p) => p.id === props.submit.drawerId)?.name ?? "Someone";
+  const drawer = props.room.players.find((p) => p.id === props.submit.drawerId);
+  const drawerName = drawer?.name ?? "Someone";
 
   const handleSubmit = () => {
     if (!text.trim() || submitting) return;
@@ -35,7 +36,12 @@ export function SubmitScreen(props: {
           </div>
         </div>
 
-        <div style={{ marginBottom: "2rem" }} />
+        <div className="drawer-info" style={{ display: "flex", alignItems: "center", gap: "12px", margin: "1.2rem 0" }}>
+          {drawer?.avatarUrl && (
+            <img src={drawer.avatarUrl} alt="drawer" className="avatar-small" style={{ border: `2px solid ${drawer.color}` }} />
+          )}
+          <div className="muted">Drawing {props.submit.drawingIndex + 1} of {props.submit.totalDrawings} by <b style={{ color: drawer?.color }}>{drawerName}</b></div>
+        </div>
 
         <img className="img" src={props.submit.imageDataUrl} alt="drawing" />
 

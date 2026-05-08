@@ -92,7 +92,12 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
       </div>
 
       <div className="sidebar-header">
-        <h3>Game Status</h3>
+        <div>
+          <h3 style={{ marginBottom: "2px" }}>Game Status</h3>
+          {room.phase !== "lobby" && room.phase !== "game_over" && (
+            <div className="muted small">Round {room.round} / {room.totalRounds}</div>
+          )}
+        </div>
         {timeLeft !== null && (
           <div className={`timer ${timeLeft <= 5 ? "urgent" : ""}`}>
             {timeLeft}s

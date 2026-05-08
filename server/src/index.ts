@@ -210,7 +210,12 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
             }
           }
           r.isFakeArtistCaught = (caughtId === r.fakeArtistId);
-          r.phase = "fake_votes";
+          if (r.isFakeArtistCaught) {
+            r.phase = "guess";
+          } else {
+            resolveFakeArtistRound(r, true);
+            r.phase = "reveal_fake";
+          }
           setupPhaseTimer(r);
         }
         emitRoom(r.roomCode);
@@ -286,7 +291,12 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
         }
       }
       room.isFakeArtistCaught = (caughtId === room.fakeArtistId);
-      room.phase = "fake_votes";
+      if (room.isFakeArtistCaught) {
+        room.phase = "guess";
+      } else {
+        resolveFakeArtistRound(room, true);
+        room.phase = "reveal_fake";
+      }
     } else if (room.phase === "guess") {
       room.phase = "reveal_fake";
     }
@@ -626,7 +636,12 @@ io.on("connection", (socket) => {
       }
 
       room.isFakeArtistCaught = (caughtId === room.fakeArtistId);
-      room.phase = "fake_votes";
+      if (room.isFakeArtistCaught) {
+        room.phase = "guess";
+      } else {
+        resolveFakeArtistRound(room, true);
+        room.phase = "reveal_fake";
+      }
       setupPhaseTimer(room);
     }
 

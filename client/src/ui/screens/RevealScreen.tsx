@@ -43,7 +43,7 @@ export function RevealScreen(props: {
             <div>
               <h2 style={{ margin: 0 }}>Reveal</h2>
               <div className="muted">
-                Drawing by <b style={{ color: drawerColor }}>{drawerName}</b>
+                Drawing {props.reveal.drawingIndex + 1} of {props.reveal.totalDrawings} by <b style={{ color: drawerColor }}>{drawerName}</b>
               </div>
             </div>
           </div>
@@ -67,7 +67,7 @@ export function RevealScreen(props: {
 
             <div className="votes-section">
               <h3 style={{ marginBottom: "1rem" }}>Votes</h3>
-              <div className="list">
+              <div className="list" style={props.reveal.options.length > 4 ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" } : undefined}>
                 {props.reveal.options.map((o) => {
                   const authorId = o.authorId;
                   const isReal = !authorId;

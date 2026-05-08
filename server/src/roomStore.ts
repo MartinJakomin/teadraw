@@ -138,7 +138,9 @@ export function toPublicState(room: Room): RoomStatePublic {
     base.submit = {
       drawerId: currentDrawing.drawerId,
       imageDataUrl: currentDrawing.imageDataUrl || "",
-      submittedBy: [...room.clueByPlayerId.keys()]
+      submittedBy: [...room.clueByPlayerId.keys()],
+      drawingIndex: room.drawingIndex,
+      totalDrawings: room.drawings.length
     };
   }
 
@@ -147,7 +149,9 @@ export function toPublicState(room: Room): RoomStatePublic {
       drawerId: currentDrawing.drawerId,
       imageDataUrl: currentDrawing.imageDataUrl || "",
       options: room.options.map((o) => ({ id: o.id, text: o.text })),
-      votedBy: [...room.voteByVoterId.keys()]
+      votedBy: [...room.voteByVoterId.keys()],
+      drawingIndex: room.drawingIndex,
+      totalDrawings: room.drawings.length
     };
   }
 

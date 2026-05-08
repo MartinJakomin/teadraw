@@ -46,8 +46,8 @@ export type RoomState = {
   players: Array<{ id: PlayerId; name: string; score: number; connected: boolean; color: string; avatarUrl?: string; isBot?: boolean }>;
   avatar?: { submittedBy: PlayerId[] };
   drawing?: { submittedBy: PlayerId[] };
-  submit?: { drawerId: PlayerId; imageDataUrl: string; submittedBy: PlayerId[] };
-  vote?: { drawerId: PlayerId; imageDataUrl: string; options: Array<{ id: string; text: string }>; votedBy: PlayerId[] };
+  submit?: { drawerId: PlayerId; imageDataUrl: string; submittedBy: PlayerId[]; drawingIndex: number; totalDrawings: number; };
+  vote?: { drawerId: PlayerId; imageDataUrl: string; options: Array<{ id: string; text: string }>; votedBy: PlayerId[]; drawingIndex: number; totalDrawings: number; };
   reveal?: Reveal;
   fakeArtist?: {
     questionMasterId: PlayerId;
