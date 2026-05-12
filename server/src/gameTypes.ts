@@ -66,12 +66,16 @@ export type RoomStatePublic = {
     drawerId: PlayerId;
     imageDataUrl: string;
     submittedBy: PlayerId[];
+    drawingIndex: number;
+    totalDrawings: number;
   };
   vote?: {
     drawerId: PlayerId;
     imageDataUrl: string;
     options: Array<Pick<Option, "id" | "text">>;
     votedBy: PlayerId[];
+    drawingIndex: number;
+    totalDrawings: number;
   };
   reveal?: Reveal;
   fakeArtist?: {
