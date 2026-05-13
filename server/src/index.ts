@@ -3,6 +3,7 @@ import cors from "cors";
 import http from "http";
 import path from "path";
 import { readFileSync } from "fs";
+import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import type { Player } from "./gameTypes.js";
@@ -55,10 +56,15 @@ const app = express();
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// Root dir is two levels up from server/src or server/dist
+const rootDir = path.resolve(__dirname, "../..");
+const clientDistDir = path.join(rootDir, "client/dist");
+
 let serverVersion = "1.0.0";
 try {
-  // path.resolve() returns the directory where the process is executed (likely the root or server dir)
-  const pkgPath = path.join(path.resolve(), "../package.json");
+  const pkgPath = path.join(rootDir, "package.json");
   const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
   if (pkg.version) serverVersion = pkg.version;
 } catch (e) {
@@ -69,14 +75,15 @@ try {
   } catch (e2) { }
 }
 
-app.get("/api/version", (_req, res) => res.json({ version: serverVersion }));
+// eslint-disable-next-line no-console
+console.log(`Server version: ${serverVersion}`);
 
-const __dirname = path.resolve();
+app.get("/api/version", (_req, res) => res.json({ version: serverVersion }));
 
 // Hashed assets (JS, CSS, images) – safe to cache forever because the filename changes on each build
 app.use(
   "/assets",
-  express.static(path.join(__dirname, "../client/dist/assets"), {
+  express.static(path.join(clientDistDir, "assets"), {
     maxAge: "1d",
     immutable: true
   })
@@ -84,7 +91,7 @@ app.use(
 
 // Everything else (including index.html) – always revalidate so browsers pick up new asset names
 app.use(
-  express.static(path.join(__dirname, "../client/dist"), {
+  express.static(clientDistDir, {
     setHeaders(res, filePath) {
       if (filePath.endsWith(".html")) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -99,7 +106,7 @@ app.get("*", (_req, res) => {
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
-  res.sendFile(path.join(__dirname, "../client/dist/index.html"));
+  res.sendFile(path.join(clientDistDir, "index.html"));
 });
 
 const server = http.createServer(app);

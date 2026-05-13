@@ -12,13 +12,20 @@ export function HomeScreen(props: {
   onCreate: () => void;
   onJoin: () => void;
 }) {
-  const [serverVersion, setServerVersion] = useState<string>("");
+  const [serverVersion, setServerVersion] = useState<string>(
+    import.meta.env.VITE_APP_VERSION || ""
+  );
 
   useEffect(() => {
     fetch(`${SERVER_URL}/api/version`)
       .then(r => r.json())
-      .then(d => { if (d.version) setServerVersion(d.version); })
-      .catch(() => { });
+      .then(d => {
+        if (d.version) setServerVersion(d.version);
+        else console.error("Version endpoint returned empty", d);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch version:", err);
+      });
   }, []);
 
   return (
@@ -53,10 +60,13 @@ export function HomeScreen(props: {
             <div className="game-tile-icon">🏠</div>
             <div className="game-tile-name">Host a Game</div>
             <div className="game-tile-desc">Create a new private room and invite your friends to play.</div>
-            <button
-              className="btn primary"
-              style={{ width: "100%", marginTop: "1.5rem" }}
-              onClick={props.onCreate}
+            <button 
+              className="btn primary" 
+              style={{ width: "100%", marginTop: "1.5rem" }} 
+              onClick={() => {
+                console.log(`Creating room... Version: ${serverVersion}`);
+                props.onCreate();
+              }} 
               disabled={!props.name.trim()}
             >
               Create Room
@@ -82,7 +92,10 @@ export function HomeScreen(props: {
             <button
               className="btn"
               style={{ width: "100%", marginTop: "1.5rem" }}
-              onClick={props.onJoin}
+              onClick={() => {
+                console.log(`Joining room ${props.roomCode}... Version: ${serverVersion}`);
+                props.onJoin();
+              }}
               disabled={!props.name.trim() || props.roomCode.trim().length !== 4}
             >
               Join Room

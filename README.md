@@ -21,6 +21,17 @@ npm run dev:all
 - Client: `http://localhost:5173`
 - Server: `http://localhost:3000`
 
+
+## Run (prod)
+
+```bash
+npm install && npm run build
+```
+
+```bash
+npm start
+```
+
 ---
 
 ## 🎨 Game Mode: Drawful
