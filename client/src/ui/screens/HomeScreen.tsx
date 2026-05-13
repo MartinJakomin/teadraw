@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { SERVER_URL } from "../../net/socket";
 
 import logoUrl from "../../../media/logo-transparent.png";
 
@@ -11,6 +12,15 @@ export function HomeScreen(props: {
   onCreate: () => void;
   onJoin: () => void;
 }) {
+  const [serverVersion, setServerVersion] = useState<string>("");
+
+  useEffect(() => {
+    fetch(`${SERVER_URL}/api/version`)
+      .then(r => r.json())
+      .then(d => { if (d.version) setServerVersion(d.version); })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="page center" style={{ background: "var(--bg)" }}>
       <div style={{ maxWidth: "900px", width: "95%", textAlign: "center" }}>
@@ -83,6 +93,12 @@ export function HomeScreen(props: {
         {props.error && (
           <div className="error scale-in" style={{ marginTop: "2rem", padding: "1rem", borderRadius: "8px", background: "rgba(239, 68, 68, 0.1)" }}>
             {props.error}
+          </div>
+        )}
+
+        {serverVersion && (
+          <div style={{ marginTop: "2rem", color: "rgba(255, 255, 255, 0.5)", fontSize: "0.9rem" }}>
+            Server Version: {serverVersion}
           </div>
         )}
       </div>

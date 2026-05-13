@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import http from "http";
 import path from "path";
+import { readFileSync } from "fs";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
 import type { Player } from "./gameTypes.js";
@@ -54,9 +55,50 @@ const app = express();
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+let serverVersion = "1.0.0";
+try {
+  // path.resolve() returns the directory where the process is executed (likely the root or server dir)
+  const pkgPath = path.join(path.resolve(), "../package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+  if (pkg.version) serverVersion = pkg.version;
+} catch (e) {
+  try {
+    const pkgPath = path.join(path.resolve(), "package.json");
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+    if (pkg.version) serverVersion = pkg.version;
+  } catch (e2) {}
+}
+
+app.get("/api/version", (_req, res) => res.json({ version: serverVersion }));
+
 const __dirname = path.resolve();
-app.use(express.static(path.join(__dirname, "../client/dist")));
+
+// Hashed assets (JS, CSS, images) – safe to cache forever because the filename changes on each build
+app.use(
+  "/assets",
+  express.static(path.join(__dirname, "../client/dist/assets"), {
+    maxAge: "1y",
+    immutable: true
+  })
+);
+
+// Everything else (including index.html) – always revalidate so browsers pick up new asset names
+app.use(
+  express.static(path.join(__dirname, "../client/dist"), {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      }
+    }
+  })
+);
+
 app.get("*", (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.sendFile(path.join(__dirname, "../client/dist/index.html"));
 });
 
