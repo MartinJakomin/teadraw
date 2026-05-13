@@ -66,7 +66,7 @@ try {
     const pkgPath = path.join(path.resolve(), "package.json");
     const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
     if (pkg.version) serverVersion = pkg.version;
-  } catch (e2) {}
+  } catch (e2) { }
 }
 
 app.get("/api/version", (_req, res) => res.json({ version: serverVersion }));
@@ -77,7 +77,7 @@ const __dirname = path.resolve();
 app.use(
   "/assets",
   express.static(path.join(__dirname, "../client/dist/assets"), {
-    maxAge: "1y",
+    maxAge: "1d",
     immutable: true
   })
 );

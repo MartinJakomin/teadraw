@@ -18,32 +18,32 @@ export function HomeScreen(props: {
     fetch(`${SERVER_URL}/api/version`)
       .then(r => r.json())
       .then(d => { if (d.version) setServerVersion(d.version); })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   return (
     <div className="page center" style={{ background: "var(--bg)" }}>
       <div style={{ maxWidth: "900px", width: "95%", textAlign: "center" }}>
-        <img 
-          src={logoUrl} 
-          alt="TeaDraw Logo" 
-          style={{ 
-            maxWidth: "350px", 
-            width: "100%", 
+        <img
+          src={logoUrl}
+          alt="TeaDraw Logo"
+          style={{
+            maxWidth: "350px",
+            width: "100%",
             marginBottom: "1rem",
             filter: "drop-shadow(0 0 20px rgba(255, 255, 255, 0.2))"
-          }} 
+          }}
         />
-        
+
         <div className="card" style={{ marginBottom: "2rem", padding: "1.5rem" }}>
           <div className="field" style={{ margin: 0 }}>
             <label style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.8rem" }}>First, enter your name:</label>
-            <input 
+            <input
               style={{ textAlign: "center", fontSize: "1.5rem", padding: "1rem" }}
-              value={props.name} 
-              onChange={(e) => props.setName(e.target.value)} 
-              placeholder="Enter your name..." 
-              maxLength={18} 
+              value={props.name}
+              onChange={(e) => props.setName(e.target.value)}
+              placeholder="Enter your name..."
+              maxLength={18}
             />
           </div>
         </div>
@@ -53,10 +53,10 @@ export function HomeScreen(props: {
             <div className="game-tile-icon">🏠</div>
             <div className="game-tile-name">Host a Game</div>
             <div className="game-tile-desc">Create a new private room and invite your friends to play.</div>
-            <button 
-              className="btn primary" 
-              style={{ width: "100%", marginTop: "1.5rem" }} 
-              onClick={props.onCreate} 
+            <button
+              className="btn primary"
+              style={{ width: "100%", marginTop: "1.5rem" }}
+              onClick={props.onCreate}
               disabled={!props.name.trim()}
             >
               Create Room
@@ -67,7 +67,7 @@ export function HomeScreen(props: {
             <div className="game-tile-icon">🔑</div>
             <div className="game-tile-name">Join a Game</div>
             <div className="game-tile-desc">Enter a 4-letter room code to join an existing game.</div>
-            
+
             <div className="field" style={{ width: "100%", marginTop: "1rem", marginBottom: "0" }}>
               <input
                 style={{ textAlign: "center", letterSpacing: "4px", fontSize: "1.4rem", textTransform: "uppercase" }}
@@ -79,10 +79,10 @@ export function HomeScreen(props: {
               />
             </div>
 
-            <button 
-              className="btn" 
-              style={{ width: "100%", marginTop: "1.5rem" }} 
-              onClick={props.onJoin} 
+            <button
+              className="btn"
+              style={{ width: "100%", marginTop: "1.5rem" }}
+              onClick={props.onJoin}
               disabled={!props.name.trim() || props.roomCode.trim().length !== 4}
             >
               Join Room
@@ -98,7 +98,7 @@ export function HomeScreen(props: {
 
         {serverVersion && (
           <div style={{ marginTop: "2rem", color: "rgba(255, 255, 255, 0.5)", fontSize: "0.9rem" }}>
-            Server Version: {serverVersion}
+            Version: {serverVersion}
           </div>
         )}
       </div>
