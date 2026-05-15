@@ -2,6 +2,50 @@ import { nanoid } from "nanoid";
 import type { Drawing, Option, Phase, Player, PlayerId, Reveal, RoomCode, RoomStatePublic } from "./gameTypes.js";
 import { pickPrompts } from "./prompts.js";
 
+/** Non-spectators in join order (includes disconnected). */
+export function playingPlayerIdsInOrder(room: { playerOrder: PlayerId[]; playersById: Map<PlayerId, Player> }): PlayerId[] {
+  return room.playerOrder.filter((id) => !room.playersById.get(id)?.isSpectator);
+}
+
+/** Fake Artist artists after QM in table order, excluding spectators. */
+export function getFakeArtistArtistOrder(room: Room): PlayerId[] {
+  const qm = room.questionMasterId;
+  if (!qm) return [];
+  const qmIndex = room.playerOrder.indexOf(qm);
+  if (qmIndex < 0) return [];
+  const out: PlayerId[] = [];
+  for (let i = 1; i <= room.playerOrder.length; i++) {
+    const idx = (qmIndex + i) % room.playerOrder.length;
+    const pid = room.playerOrder[idx]!;
+    if (pid === qm) continue;
+    const p = room.playersById.get(pid);
+    if (p && !p.isSpectator) out.push(pid);
+  }
+  return out;
+}
+
+export function toggleSpectator(room: Room, playerId: PlayerId): { ok: boolean; error?: string } {
+  if (room.phase !== "lobby") return { ok: false, error: "Spectator mode can only be changed in the lobby." };
+  const p = room.playersById.get(playerId);
+  if (!p) return { ok: false, error: "Player not found." };
+  if (p.isSpectator) {
+    p.isSpectator = false;
+    return { ok: true };
+  }
+  const othersPlaying = listPlayers(room).filter((x) => x.id !== playerId && x.connected && !x.isSpectator);
+  if (room.hostId === playerId && othersPlaying.length === 0) {
+    return {
+      ok: false,
+      error: "Another online player who is not spectating must be in the room before the host can watch as spectator."
+    };
+  }
+  p.isSpectator = true;
+  if (room.hostId === playerId) {
+    room.hostId = othersPlaying[0]!.id;
+  }
+  return { ok: true };
+}
+
 type Room = {
   roomCode: RoomCode;
   hostId: PlayerId;
@@ -14,6 +58,7 @@ type Room = {
   totalRounds: number;
   timerSeconds: number;
   useExtraPrompt: boolean;
+  fakeArtistHighlight: boolean;
   lockColors: boolean;
   revealOrder: "random" | "round_robin";
   botCount: number;
@@ -29,7 +74,7 @@ type Room = {
   voteByVoterId: Map<PlayerId, string>;
   reveal?: Reveal;
   usedPrompts: Set<string>;
-  
+
   // Fake Artist specific
   questionMasterId?: PlayerId;
   fakeArtistId?: PlayerId;
@@ -38,6 +83,8 @@ type Room = {
   activePlayerId?: PlayerId;
   turnNumber: number;
   sharedDrawingUrl?: string;
+  /** After each stroke: full canvas snapshot + drawer (sent to clients in accuse phase for per-player highlight). */
+  fakeArtistStrokeLog: Array<{ playerId: PlayerId; snapshotUrl: string }>;
   votedForId: Map<PlayerId, PlayerId>;
   isFakeArtistCaught?: boolean;
   fakeArtistGuess?: string;
@@ -72,6 +119,7 @@ export function createRoom(host: Player): Room {
     useExtraPrompt: false,
     lockColors: false,
     revealOrder: "random",
+    fakeArtistHighlight: true,
     botCount: 0,
     drawings: [],
     drawingIndex: 0,
@@ -81,6 +129,7 @@ export function createRoom(host: Player): Room {
     votedForId: new Map(),
     usedPrompts: new Set(),
     turnNumber: 0,
+    fakeArtistStrokeLog: [],
     pointsDeltaByPlayer: new Map()
   };
   rooms.set(roomCode, room);
@@ -101,7 +150,16 @@ export function listPlayers(room: Room) {
 
 export function toPublicState(room: Room): RoomStatePublic {
   const players = listPlayers(room)
-    .map((p) => ({ id: p.id, name: p.name, score: p.score, connected: p.connected, color: p.color, avatarUrl: p.avatarUrl, isBot: p.isBot }))
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      score: p.score,
+      connected: p.connected,
+      color: p.color,
+      avatarUrl: p.avatarUrl,
+      isBot: p.isBot,
+      isSpectator: p.isSpectator
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const currentDrawing = room.drawings[room.drawingIndex];
@@ -117,10 +175,16 @@ export function toPublicState(room: Room): RoomStatePublic {
     useExtraPrompt: room.useExtraPrompt,
     lockColors: room.lockColors,
     revealOrder: room.revealOrder,
+    fakeArtistHighlight: room.fakeArtistHighlight,
     botCount: room.botCount,
+    playerOrder: [...room.playerOrder],
     endTime: room.endTime,
     players
   };
+
+  if (room.gameType === "drawful" && room.drawings.length > 0) {
+    base.drawingPlayerOrder = room.drawings.map((d) => d.drawerId);
+  }
 
   if (room.phase === "avatar") {
     base.avatar = {
@@ -163,7 +227,7 @@ export function toPublicState(room: Room): RoomStatePublic {
   }
 
   if (room.gameType === "fake_artist" && room.questionMasterId && room.fakeArtistId) {
-    base.fakeArtist = {
+    const fa: NonNullable<RoomStatePublic["fakeArtist"]> = {
       questionMasterId: room.questionMasterId,
       fakeArtistId: room.fakeArtistId,
       category: room.category,
@@ -177,6 +241,10 @@ export function toPublicState(room: Room): RoomStatePublic {
       winner: room.fakeArtistWinner,
       pointsDeltaByPlayer: Object.fromEntries(room.pointsDeltaByPlayer.entries())
     };
+    if (room.phase === "accuse" && room.fakeArtistStrokeLog.length > 0) {
+      fa.strokeLog = room.fakeArtistStrokeLog.map((e) => ({ playerId: e.playerId, snapshotUrl: e.snapshotUrl }));
+    }
+    base.fakeArtist = fa;
   }
 
   return base;
@@ -204,7 +272,7 @@ export function setConnected(room: Room, playerId: PlayerId, connected: boolean,
 export function maybeReassignHost(room: Room) {
   const host = room.playersById.get(room.hostId);
   if (host?.connected) return;
-  const next = listPlayers(room).find((p) => p.connected);
+  const next = listPlayers(room).find((p) => p.connected && !p.isSpectator) ?? listPlayers(room).find((p) => p.connected);
   if (next) room.hostId = next.id;
 }
 
@@ -245,13 +313,14 @@ function computeRevealOrder(room: Room, players: PlayerId[], round: number): Pla
   return shuffle(players);
 }
 
-export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean }) {
+export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean }) {
   room.round = 1;
   room.gameType = options.gameType || "drawful";
   room.totalRounds = options.totalRounds !== undefined ? options.totalRounds : room.totalRounds;
   room.timerSeconds = options.timerSeconds || 0;
   room.useExtraPrompt = options.useExtraPrompt || false;
   room.lockColors = options.lockColors || false;
+  room.fakeArtistHighlight = options.fakeArtistHighlight !== undefined ? options.fakeArtistHighlight : true;
   room.revealOrder = options.revealOrder || "random";
   room.usedPrompts.clear();
 
@@ -279,7 +348,7 @@ export function beginRound(room: Room) {
 }
 
 export function beginFakeArtistRound(room: Room) {
-  const pids = listPlayers(room).map(p => p.id);
+  const pids = listPlayers(room).filter((p) => !p.isSpectator).map((p) => p.id);
   if (pids.length < 3) return; // Should be handled by UI but good to have
 
   // Pick QM (rotates or random)
@@ -293,20 +362,21 @@ export function beginFakeArtistRound(room: Room) {
   room.category = undefined;
   room.word = undefined;
   room.sharedDrawingUrl = undefined;
+  room.fakeArtistStrokeLog = [];
   room.turnNumber = 0;
   room.votedForId.clear();
   room.isFakeArtistCaught = undefined;
   room.fakeArtistGuess = undefined;
   room.fakeArtistWinner = undefined;
   room.pointsDeltaByPlayer.clear();
-  
+
   room.phase = "category";
 }
 
 export function resolveFakeArtistRound(room: Room, fakeArtistWins: boolean) {
   room.fakeArtistWinner = fakeArtistWins ? "fake" : "artists";
   room.pointsDeltaByPlayer.clear();
-  
+
   if (fakeArtistWins) {
     const fakeArtist = room.playersById.get(room.fakeArtistId!);
     const qm = room.playersById.get(room.questionMasterId!);
@@ -320,7 +390,7 @@ export function resolveFakeArtistRound(room: Room, fakeArtistWins: boolean) {
     }
   } else {
     room.playersById.forEach(p => {
-      if (p.id !== room.fakeArtistId && p.id !== room.questionMasterId) {
+      if (p.id !== room.fakeArtistId && p.id !== room.questionMasterId && !p.isSpectator) {
         p.score += 1;
         room.pointsDeltaByPlayer.set(p.id, 1);
       }
@@ -337,7 +407,10 @@ export function submitAvatar(room: Room, playerId: PlayerId, imageDataUrl: strin
 }
 
 export function allAvatarsSubmitted(room: Room): boolean {
-  const activePlayers = room.playerOrder.filter((id) => room.playersById.get(id)?.connected);
+  const activePlayers = room.playerOrder.filter((id) => {
+    const p = room.playersById.get(id);
+    return p?.connected && !p.isSpectator;
+  });
   if (activePlayers.length === 0) return false;
   return activePlayers.every((id) => {
     const p = room.playersById.get(id);
@@ -346,13 +419,18 @@ export function allAvatarsSubmitted(room: Room): boolean {
 }
 
 export function startRound(room: Room) {
-  const activePlayers = room.playerOrder.filter((id) => room.playersById.get(id)?.connected);
-  const players = activePlayers.length ? activePlayers : room.playerOrder;
-  const prompts = pickPrompts(players.length, room.usedPrompts);
-  const order = computeRevealOrder(room, players, room.round);
+  const activePlayers = room.playerOrder.filter((id) => {
+    const p = room.playersById.get(id);
+    return p?.connected && !p.isSpectator;
+  });
+  const players = activePlayers.length ? activePlayers : playingPlayerIdsInOrder(room);
+  const playerIdsForRound =
+    players.length > 0 ? players : room.playerOrder.filter((id) => room.playersById.has(id));
+  const prompts = pickPrompts(playerIdsForRound.length, room.usedPrompts);
+  const order = computeRevealOrder(room, playerIdsForRound, room.round);
 
   const promptByPlayer = new Map<PlayerId, string>();
-  players.forEach((pid, idx) => promptByPlayer.set(pid, prompts[idx]));
+  playerIdsForRound.forEach((pid, idx) => promptByPlayer.set(pid, prompts[idx]));
 
   room.drawings = order.map((drawerId) => ({
     drawerId,
@@ -392,7 +470,7 @@ export function submitClue(room: Room, playerId: PlayerId, text: string) {
 export function allCluesSubmitted(room: Room): boolean {
   const cur = room.drawings[room.drawingIndex];
   if (!cur) return false;
-  const voters = listPlayers(room).filter((p) => p.id !== cur.drawerId);
+  const voters = listPlayers(room).filter((p) => p.id !== cur.drawerId && !p.isSpectator);
   return voters.length > 0 && voters.every((p) => room.clueByPlayerId.has(p.id));
 }
 
@@ -419,7 +497,7 @@ export function beginVote(room: Room) {
   if (room.useExtraPrompt) {
     const activePrompts = new Set(room.drawings.map(d => d.prompt));
     for (const opt of options) activePrompts.add(opt.text);
-    
+
     // Attempt to pick a prompt not used in the game so far
     let extraPrompt = "A mysterious extra prompt";
     const availablePrompts = pickPrompts(1, room.usedPrompts);
@@ -445,7 +523,7 @@ export function castVote(room: Room, voterId: PlayerId, optionId: string) {
 export function allVotesCast(room: Room): boolean {
   const cur = room.drawings[room.drawingIndex];
   if (!cur) return false;
-  const voters = listPlayers(room).filter((p) => p.id !== cur.drawerId);
+  const voters = listPlayers(room).filter((p) => p.id !== cur.drawerId && !p.isSpectator);
   return voters.length > 0 && voters.every((p) => room.voteByVoterId.has(p.id));
 }
 
@@ -457,7 +535,7 @@ export function scoreAndReveal(room: Room) {
   const realOption = room.options.find((o) => o.authorId === null);
   if (!realOption) return;
 
-  const voters = listPlayers(room).filter((p) => p.id !== drawerId);
+  const voters = listPlayers(room).filter((p) => p.id !== drawerId && !p.isSpectator);
   const correctVoters = voters.filter((v) => room.voteByVoterId.get(v.id) === realOption.id);
 
   const pointsDeltaByPlayer: Record<PlayerId, number> = {};

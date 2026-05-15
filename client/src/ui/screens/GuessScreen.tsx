@@ -46,9 +46,9 @@ export function GuessScreen(props: {
           />
         </div>
 
-        <button 
-          className="btn primary" 
-          disabled={!guess.trim()}
+        <button
+          className="btn primary"
+          disabled={!guess.trim() || Boolean(props.me.isSpectator)}
           onClick={() => props.onSubmit(guess)}
         >
           Submit Guess

@@ -41,9 +41,14 @@ export type RoomState = {
   useExtraPrompt: boolean;
   lockColors: boolean;
   revealOrder: "random" | "round_robin";
+  fakeArtistHighlight: boolean;
   botCount: number;
   endTime?: number;
-  players: Array<{ id: PlayerId; name: string; score: number; connected: boolean; color: string; avatarUrl?: string; isBot?: boolean }>;
+  /** Join order; used for turn strips */
+  playerOrder: PlayerId[];
+  /** Drawful: drawer ids for current round in reveal order */
+  drawingPlayerOrder?: PlayerId[];
+  players: Array<{ id: PlayerId; name: string; score: number; connected: boolean; color: string; avatarUrl?: string; isBot?: boolean; isSpectator?: boolean }>;
   avatar?: { submittedBy: PlayerId[] };
   drawing?: { submittedBy: PlayerId[] };
   submit?: { drawerId: PlayerId; imageDataUrl: string; submittedBy: PlayerId[]; drawingIndex: number; totalDrawings: number; };
@@ -57,6 +62,7 @@ export type RoomState = {
     activePlayerId?: PlayerId;
     turnNumber: number;
     sharedDrawingUrl?: string;
+    strokeLog?: Array<{ playerId: PlayerId; snapshotUrl: string }>;
     votedForId?: Record<PlayerId, PlayerId>;
     isFakeArtistCaught?: boolean;
     fakeArtistGuess?: string;

@@ -1,7 +1,13 @@
 import React from "react";
 import type { RoomState } from "../../types";
 
-export function GameOverScreen(props: { room: RoomState; isHost: boolean; onRestart: () => void; onLeave: () => void }) {
+export function GameOverScreen(props: {
+  room: RoomState;
+  me?: RoomState["players"][number];
+  isHost: boolean;
+  onRestart: () => void;
+  onLeave: () => void;
+}) {
   const sorted = [...props.room.players].sort((a, b) => b.score - a.score);
   const podium = sorted.slice(0, 3);
   const others = sorted.slice(3);
@@ -73,7 +79,7 @@ export function GameOverScreen(props: { room: RoomState; isHost: boolean; onRest
         <div className="divider" />
 
         <div className="row center" style={{ marginTop: "1rem" }}>
-          {props.isHost ? (
+          {props.isHost && !props.me?.isSpectator ? (
             <button className="btn primary" onClick={props.onRestart}>
               Play again
             </button>

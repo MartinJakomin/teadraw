@@ -46,11 +46,11 @@ export function RevealFakeScreen(props: {
             <h1 style={{ color: "var(--primary2)" }}>{resultTitle}</h1>
             <div className="muted">{resultDesc}</div>
           </div>
-          {props.isHost && (
+          {props.isHost && !props.me.isSpectator ? (
             <button className="btn primary" onClick={props.onNext}>
               {props.room.round >= props.room.totalRounds ? "Finish Game" : "Next Round"}
             </button>
-          )}
+          ) : null}
         </div>
 
         <div className="reveal-content">

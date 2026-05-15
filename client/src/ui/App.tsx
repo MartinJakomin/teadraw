@@ -17,6 +17,7 @@ import { RevealFakeScreen } from "./screens/RevealFakeScreen";
 import { TitleScreen } from "./screens/TitleScreen";
 import { Sidebar } from "./components/Sidebar";
 import { AvatarScreen } from "./screens/AvatarScreen";
+import { SpectatorBanner } from "./components/SpectatorBanner";
 
 const LS = {
   name: "teadraw:name",
@@ -206,6 +207,7 @@ export function App() {
             isHost={isHost}
             onStart={() => socket.emit("game:start", { roomCode: room.roomCode, playerId })}
             onUpdateSettings={(settings) => socket.emit("room:updateSettings", { roomCode: room.roomCode, playerId, ...settings })}
+            onToggleSpectator={(ack) => socket.emit("room:toggleSpectator", { roomCode: room.roomCode, playerId }, ack)}
             onLeave={leave}
           />
         );
@@ -274,7 +276,7 @@ export function App() {
         );
 
       case "game_over":
-        return <GameOverScreen room={room} isHost={isHost} onRestart={() => socket.emit("game:start", { roomCode: room.roomCode, playerId })} onLeave={leave} />;
+        return <GameOverScreen room={room} me={me} isHost={isHost} onRestart={() => socket.emit("game:start", { roomCode: room.roomCode, playerId })} onLeave={leave} />;
 
       case "category":
         if (!room.fakeArtist) return <LoadingCard message="Preparing category…" />;
@@ -363,6 +365,7 @@ export function App() {
         </div>
       )}
       <div className="layout-main">
+        {me?.isSpectator && room?.phase && room.phase !== "lobby" ? <SpectatorBanner /> : null}
         {renderScreen()}
       </div>
       {me && room && (

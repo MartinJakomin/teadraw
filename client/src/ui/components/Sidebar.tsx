@@ -5,6 +5,7 @@ import logoUrl from "../../../media/logo-transparent.png";
 
 export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => void; onLeave?: () => void }) {
   const { room, meId } = props;
+  const mePlayer = room.players.find((p) => p.id === meId);
   const isHost = room.hostId === meId;
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
@@ -21,6 +22,8 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
   }, [room.endTime]);
 
   const getStatus = (pId: string) => {
+    const pl = room.players.find((p) => p.id === pId);
+    if (pl?.isSpectator && room.phase !== "lobby") return "Watching";
     if (room.phase === "lobby") return "";
     if (room.phase === "draw") {
       return room.drawing?.submittedBy.includes(pId) ? "Done" : "Drawing...";
@@ -76,7 +79,7 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
         >
           Leave
         </button>
-        {isHost && room.phase !== "lobby" && (
+        {isHost && !mePlayer?.isSpectator && room.phase !== "lobby" && (
           <button
             className="btn"
             style={{ flex: 1 }}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { RoomState } from "../../types";
 
 export function LobbyScreen(props: {
@@ -7,10 +7,16 @@ export function LobbyScreen(props: {
   isHost: boolean;
   onStart: () => void;
   onUpdateSettings: (settings: Partial<RoomState>) => void;
+  onToggleSpectator?: (ack?: (resp: { ok?: boolean; error?: string }) => void) => void;
   onLeave: () => void;
 }) {
   const { room } = props;
-  const shareText = `Room code: ${room.roomCode}`;
+  const [specMsg, setSpecMsg] = useState("");
+
+  const playingConnected = room.players.filter((p) => p.connected && !p.isSpectator).length;
+  const bots = room.botCount ?? 0;
+  const minPlayers = room.gameType === "fake_artist" ? 3 : 2;
+  const canStart = playingConnected + bots >= minPlayers;
 
   return (
     <div className="page">
@@ -35,11 +41,34 @@ export function LobbyScreen(props: {
               <div className="name">
                 {p.name} {p.id === props.me.id ? <span className="muted">(you)</span> : null}
                 {p.id === room.hostId ? <span className="tag">host</span> : null}
+                {p.isSpectator ? <span className="tag">spectator</span> : null}
               </div>
               <div className={p.connected ? "ok" : "muted"}>{p.connected ? "online" : "offline"}</div>
             </div>
           ))}
         </div>
+
+        {props.onToggleSpectator ? (
+          <div style={{ marginTop: "1rem" }}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setSpecMsg("");
+                props.onToggleSpectator?.((resp) => {
+                  if (resp && !resp.ok) setSpecMsg(resp.error ?? "Could not update spectator mode.");
+                });
+              }}
+            >
+              {props.me.isSpectator ? "🎮 Play" : "👁 Watch as Spectator"}
+            </button>
+            {specMsg ? (
+              <div className="error small" style={{ marginTop: "8px" }}>
+                {specMsg}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="divider" />
 
@@ -48,7 +77,7 @@ export function LobbyScreen(props: {
             <h3>Room Settings</h3>
             <label style={{ marginBottom: "1rem", display: "block" }}>Select Game Mode</label>
             <div className="game-tiles">
-              <div 
+              <div
                 className={`game-tile ${room.gameType === "drawful" ? "active" : ""} ${!props.isHost ? "disabled" : ""}`}
                 onClick={() => props.isHost && props.onUpdateSettings({ gameType: "drawful" })}
               >
@@ -57,7 +86,7 @@ export function LobbyScreen(props: {
                 <div className="game-tile-desc">Draw, bluff, vote!</div>
               </div>
 
-              <div 
+              <div
                 className={`game-tile ${room.gameType === "fake_artist" ? "active" : ""} ${!props.isHost ? "disabled" : ""}`}
                 onClick={() => props.isHost && props.onUpdateSettings({ gameType: "fake_artist" })}
               >
@@ -116,11 +145,23 @@ export function LobbyScreen(props: {
                     value={room.botCount ?? 0}
                     onChange={(e) => props.onUpdateSettings({ botCount: Number(e.target.value) })}
                   >
-                    {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                       <option key={n} value={n}>{n}</option>
                     ))}
                   </select>
                 </div>
+
+                {room.gameType === "fake_artist" && (
+                  <div className="setting-row">
+                    <label>Highlight Strokes:</label>
+                    <input
+                      type="checkbox"
+                      disabled={!props.isHost}
+                      checked={room.fakeArtistHighlight}
+                      onChange={(e) => props.onUpdateSettings({ fakeArtistHighlight: e.target.checked })}
+                    />
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -146,7 +187,11 @@ export function LobbyScreen(props: {
 
         <div className="row space">
           <div className="muted">Tip: open on phones and one person hosts on desktop.</div>
-          <button className="btn primary" onClick={props.onStart} disabled={!props.isHost || !room.gameType || room.players.filter((p) => p.connected).length + (room.botCount ?? 0) < 2}>
+          <button
+            className="btn primary"
+            onClick={props.onStart}
+            disabled={!props.isHost || !room.gameType || !canStart}
+          >
             Start game
           </button>
         </div>

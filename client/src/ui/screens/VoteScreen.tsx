@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from "react";
 import type { RoomState } from "../../types";
+import { PlayerOrderStrip } from "../components/PlayerOrderStrip";
+
+function drawfulVoteParticipants(room: RoomState, drawerId: string) {
+  return room.players.filter((p) => p.id !== drawerId && !p.isSpectator).length;
+}
 
 export function VoteScreen(props: {
   room: RoomState;
@@ -13,6 +18,9 @@ export function VoteScreen(props: {
 
   const drawer = props.room.players.find((p) => p.id === props.vote.drawerId);
   const drawerName = drawer?.name ?? "Someone";
+  const spectating = Boolean(props.me.isSpectator);
+  const stripIds = props.room.drawingPlayerOrder ?? [];
+  const expectedVotes = drawfulVoteParticipants(props.room, props.vote.drawerId);
 
   return (
     <div className="page">
@@ -20,7 +28,9 @@ export function VoteScreen(props: {
         <div className="row space">
           <div>
             <h2>Vote</h2>
-            <div className="muted" style={{ marginTop: "8px" }}>Which prompt is the real one?</div>
+            <div className="muted" style={{ marginTop: "8px" }}>
+              Which prompt is the real one?
+            </div>
           </div>
         </div>
 
@@ -28,13 +38,21 @@ export function VoteScreen(props: {
           {drawer?.avatarUrl && (
             <img src={drawer.avatarUrl} alt="drawer" className="avatar-small" style={{ border: `2px solid ${drawer.color}` }} />
           )}
-          <div className="muted">Drawing {props.vote.drawingIndex + 1} of {props.vote.totalDrawings} by <b style={{ color: drawer?.color }}>{drawerName}</b></div>
+          <div className="muted">
+            Drawing by <b style={{ color: drawer?.color }}>{drawerName}</b>
+          </div>
         </div>
 
         <img className="img" src={props.vote.imageDataUrl} alt="drawing" />
 
-        {isDrawer ? <div className="muted">You don’t vote on your own drawing.</div> : null}
-        {!isDrawer && already ? <div className="muted">Vote submitted. Waiting for others…</div> : null}
+        {spectating ? (
+          <div className="muted" style={{ marginTop: "1rem" }}>
+            You are spectating — you cannot vote on prompts.
+          </div>
+        ) : isDrawer ? (
+          <div className="muted">You don’t vote on your own drawing.</div>
+        ) : null}
+        {!spectating && !isDrawer && already ? <div className="muted">Vote submitted. Waiting for others…</div> : null}
 
         <div className="grid">
           {props.vote.options.map((o) => {
@@ -43,7 +61,7 @@ export function VoteScreen(props: {
               <button
                 key={o.id}
                 className={picked === o.id ? "option picked" : "option"}
-                disabled={isDrawer || already || isMyClue}
+                disabled={spectating || isDrawer || already || isMyClue}
                 onClick={() => {
                   setPicked(o.id);
                   props.onVote(o.id);
@@ -55,11 +73,20 @@ export function VoteScreen(props: {
           })}
         </div>
 
-        <div className="muted small">
-          Voted: {props.vote.votedBy.length}/{props.room.players.length - 1}
+        <div style={{ marginTop: "1.5rem" }}>
+          <PlayerOrderStrip
+            players={props.room.players}
+            orderedPlayerIds={stripIds}
+            activePlayerId={props.vote.drawerId}
+          />
+          <div className="muted small" style={{ marginTop: "10px", textAlign: "center" }}>
+            Drawing {props.vote.drawingIndex + 1} of {props.vote.totalDrawings}
+          </div>
+          <div className="muted small" style={{ marginTop: "4px", textAlign: "center" }}>
+            Voted: {props.vote.votedBy.length}/{expectedVotes}
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

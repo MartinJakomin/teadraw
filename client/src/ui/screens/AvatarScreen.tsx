@@ -9,6 +9,18 @@ export function AvatarScreen(props: {
 }) {
 
   const already = props.room.avatar?.submittedBy.includes(props.me.id);
+  const spectating = Boolean(props.me.isSpectator);
+
+  if (spectating) {
+    return (
+      <div className="page">
+        <div className="card" style={{ textAlign: "center" }}>
+          <h2>Spectating</h2>
+          <div className="muted">You are watching as a spectator — you do not submit an avatar.</div>
+        </div>
+      </div>
+    );
+  }
 
   if (already) {
     return (

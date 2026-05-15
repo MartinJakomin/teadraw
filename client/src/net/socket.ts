@@ -21,6 +21,7 @@ export type ClientToServerEvents = {
   "fake:votes:continue": (payload: { roomCode: string; playerId: string; }) => void;
   "fake:guess:submit": (payload: { roomCode: string; playerId: string; guess: string; }) => void;
   "room:stop": (payload: { roomCode: string; playerId: string; }) => void;
+  "room:toggleSpectator": (payload: { roomCode: string; playerId: string }, ack?: (resp: any) => void) => void;
 };
 
 

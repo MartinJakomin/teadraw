@@ -12,6 +12,8 @@ export type Player = {
   color: string;
   avatarUrl?: string;
   isBot?: boolean;
+  /** Lobby-only toggle: full view, no prompts / drawing / voting */
+  isSpectator?: boolean;
 };
 
 export type Drawing = {
@@ -53,8 +55,13 @@ export type RoomStatePublic = {
   useExtraPrompt: boolean;
   lockColors: boolean;
   revealOrder: "random" | "round_robin";
+  fakeArtistHighlight: boolean;
   botCount: number;
-  players: Array<Pick<Player, "id" | "name" | "score" | "connected" | "color" | "avatarUrl" | "isBot">>;
+  /** Join order (not sorted by name); used for Fake Artist turn strip and Drawful drawing order */
+  playerOrder: PlayerId[];
+  /** Drawful: drawer ids for the current round, in reveal order */
+  drawingPlayerOrder?: PlayerId[];
+  players: Array<Pick<Player, "id" | "name" | "score" | "connected" | "color" | "avatarUrl" | "isBot" | "isSpectator">>;
   endTime?: number;
   avatar?: {
     submittedBy: PlayerId[];
@@ -86,6 +93,8 @@ export type RoomStatePublic = {
     activePlayerId?: PlayerId;
     turnNumber: number;
     sharedDrawingUrl?: string;
+    /** Present during accuse: one full snapshot per stroke in order (large payload). */
+    strokeLog?: Array<{ playerId: PlayerId; snapshotUrl: string }>;
     votedForId?: Record<PlayerId, PlayerId>;
     isFakeArtistCaught?: boolean;
     fakeArtistGuess?: string;

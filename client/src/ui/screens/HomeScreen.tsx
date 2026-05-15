@@ -18,13 +18,15 @@ export function HomeScreen(props: {
 
   useEffect(() => {
     fetch(`${SERVER_URL}/api/version`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.version) setServerVersion(d.version);
-        else console.error("Version endpoint returned empty", d);
+      .then(async (r) => {
+        if (!r.ok) return;
+        const ct = r.headers.get("content-type") || "";
+        if (!ct.includes("application/json")) return;
+        const d = await r.json().catch(() => null);
+        if (d?.version) setServerVersion(d.version);
       })
-      .catch((err) => {
-        console.error("Failed to fetch version:", err);
+      .catch(() => {
+        // Silently fail to avoid console noise if server is down or route missing
       });
   }, []);
 

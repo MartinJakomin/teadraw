@@ -32,15 +32,31 @@ import {
   startRound,
   beginRound,
   resolveFakeArtistRound,
-  ensureLobby
+  ensureLobby,
+  getFakeArtistArtistOrder,
+  toggleSpectator
 } from "./roomStore.js";
 import { pickPrompts } from "./prompts.js";
 
 const COLORS = [
-  "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231",
-  "#911eb4", "#46f0f0", "#f032e6", "#bcf60c", "#fabebe",
-  "#008080", "#e6beff", "#9a6324", "#fffac8", "#800000",
-  "#aaffc3", "#808000", "#ffd8b1", "#000075", "#808080"
+  "#ff0000", // Red
+  "#0000ff", // Blue
+  "#008000", // Green
+  "#ff00ff", // Magenta
+  "#ff8c00", // Dark Orange
+  "#8a2be2", // Blue Violet
+  "#00ced1", // Dark Turquoise
+  "#dc143c", // Crimson
+  "#ffd700", // Gold
+  "#000080", // Navy
+  "#8b4513", // Saddle Brown
+  "#2e8b57", // Sea Green
+  "#9932cc", // Dark Orchid
+  "#ff1493", // Deep Pink
+  "#00fa9a", // Medium Spring Green
+  "#1e90ff", // Dodger Blue
+  "#b22222", // Firebrick
+  "#4b0082"  // Indigo
 ];
 
 function getRandomColor(usedColors: string[] = []) {
@@ -124,6 +140,7 @@ function emitPrompts(roomCode: string) {
   const room = getRoom(roomCode);
   if (!room) return;
   for (const p of listPlayers(room)) {
+    if (p.isSpectator) continue;
     const d = room.drawings.find((x) => x.drawerId === p.id);
     if (d) io.to(p.socketId).emit("prompt:you", { prompt: d.prompt });
   }
@@ -202,7 +219,7 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
         r.category = category;
         r.word = word;
         r.phase = "draw_shared";
-        const artists = r.playerOrder.filter(id => id !== r.questionMasterId);
+        const artists = getFakeArtistArtistOrder(r);
         r.activePlayerId = artists[0];
         r.turnNumber = 1;
         emitRoom(r.roomCode);
@@ -229,8 +246,10 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
         }
 
         r.sharedDrawingUrl = newSvgUrl;
+        r.fakeArtistStrokeLog ??= [];
+        r.fakeArtistStrokeLog.push({ playerId: bot.id, snapshotUrl: newSvgUrl });
         r.turnNumber++;
-        const artists = r.playerOrder.filter(id => id !== r.questionMasterId);
+        const artists = getFakeArtistArtistOrder(r);
         if (r.turnNumber > artists.length * 2) {
           r.phase = "accuse";
           r.activePlayerId = undefined;
@@ -242,7 +261,7 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
         triggerBotActions(r);
       } else if (r.phase === "accuse") {
         if (r.votedForId.has(bot.id) || r.questionMasterId === bot.id) return;
-        const artists = r.playerOrder.filter(id => id !== r.questionMasterId);
+        const artists = getFakeArtistArtistOrder(r);
         const targets = artists.filter(id => id !== bot.id);
         const targetId = targets[Math.floor(Math.random() * targets.length)]!;
         r.votedForId.set(bot.id, targetId);
@@ -311,14 +330,13 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
       room.category = "Random";
       room.word = "Banana";
       room.phase = "draw_shared";
-      const qmIndex = room.playerOrder.indexOf(room.questionMasterId!);
-      const artists = room.playerOrder.filter(id => id !== room.questionMasterId);
+      const artists = getFakeArtistArtistOrder(room);
       room.activePlayerId = artists[0];
       room.turnNumber = 1;
     } else if (room.phase === "draw_shared") {
       // Skip turn or auto-submit
       room.turnNumber++;
-      const artists = room.playerOrder.filter(id => id !== room.questionMasterId);
+      const artists = getFakeArtistArtistOrder(room);
       if (room.turnNumber > artists.length * 2) {
         room.phase = "accuse";
         room.activePlayerId = undefined;
@@ -328,7 +346,7 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
       }
     } else if (room.phase === "accuse") {
       // Auto-end accusation
-      const artists = room.playerOrder.filter(id => id !== room.questionMasterId);
+      const artists = getFakeArtistArtistOrder(room);
       const votes: Record<string, number> = {};
       room.votedForId.forEach(tid => votes[tid] = (votes[tid] || 0) + 1);
       let maxVotes = 0;
@@ -435,6 +453,7 @@ io.on("connection", (socket) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
       if (!room) return ack?.({ ok: false, error: "Room not found" });
       if (room.hostId !== playerId) return ack?.({ ok: false, error: "Only host can start" });
+      if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot start the game." });
       if (room.phase !== "lobby" && room.phase !== "game_over") return ack?.({ ok: false, error: "Game already running" });
 
       // Reset scores on a fresh start from game_over as well
@@ -468,7 +487,8 @@ io.on("connection", (socket) => {
         revealOrder,
         timerSeconds: (room as any).timerSeconds,
         useExtraPrompt: (room as any).useExtraPrompt,
-        lockColors: lockColors !== undefined ? lockColors : (room as any).lockColors
+        lockColors: lockColors !== undefined ? lockColors : (room as any).lockColors,
+        fakeArtistHighlight: (room as any).fakeArtistHighlight
       });
       setupPhaseTimer(room);
       emitPrompts(room.roomCode);
@@ -480,6 +500,7 @@ io.on("connection", (socket) => {
   socket.on("room:stop", ({ roomCode, playerId }: { roomCode: string, playerId: string }) => {
     const room = getRoom(roomCode);
     if (!room || room.hostId !== playerId) return;
+    if (room.playersById.get(playerId)?.isSpectator) return;
 
     ensureLobby(room);
     emitRoom(roomCode);
@@ -488,7 +509,7 @@ io.on("connection", (socket) => {
   socket.on(
     "room:updateSettings",
     (
-      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, useExtraPrompt, lockColors, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; botCount?: number },
+      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, useExtraPrompt, lockColors, fakeArtistHighlight, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean; botCount?: number },
       ack?: (resp: any) => void
     ) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
@@ -502,6 +523,7 @@ io.on("connection", (socket) => {
       if (timerSeconds !== undefined) room.timerSeconds = Number(timerSeconds);
       if (useExtraPrompt !== undefined) room.useExtraPrompt = Boolean(useExtraPrompt);
       if (lockColors !== undefined) room.lockColors = Boolean(lockColors);
+      if (fakeArtistHighlight !== undefined) room.fakeArtistHighlight = Boolean(fakeArtistHighlight);
       if (botCount !== undefined) room.botCount = Number(botCount);
 
       ack?.({ ok: true });
@@ -515,6 +537,7 @@ io.on("connection", (socket) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
       if (!room) return ack?.({ ok: false, error: "Room not found" });
       if (room.phase !== "avatar") return ack?.({ ok: false, error: "Not in avatar phase" });
+      if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot submit an avatar." });
 
       submitAvatar(room, playerId, String(imageDataUrl ?? ""), color);
       ack?.({ ok: true });
@@ -535,6 +558,7 @@ io.on("connection", (socket) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
       if (!room) return ack?.({ ok: false, error: "Room not found" });
       if (room.phase !== "draw") return ack?.({ ok: false, error: "Not in draw phase" });
+      if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot submit a drawing." });
 
       submitDrawing(room, playerId, String(imageDataUrl ?? ""));
       ack?.({ ok: true });
@@ -554,6 +578,7 @@ io.on("connection", (socket) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
       if (!room) return ack?.({ ok: false, error: "Room not found" });
       if (room.phase !== "submit") return ack?.({ ok: false, error: "Not in submit phase" });
+      if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot submit clues." });
 
       const cur = room.drawings[room.drawingIndex];
       const submittedText = String(text ?? "").trim();
@@ -579,6 +604,7 @@ io.on("connection", (socket) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
       if (!room) return ack?.({ ok: false, error: "Room not found" });
       if (room.phase !== "vote") return ack?.({ ok: false, error: "Not in vote phase" });
+      if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot vote." });
 
       castVote(room, playerId, String(optionId ?? ""));
       ack?.({ ok: true });
@@ -596,6 +622,7 @@ io.on("connection", (socket) => {
     const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
     if (!room) return ack?.({ ok: false, error: "Room not found" });
     if (room.hostId !== playerId) return ack?.({ ok: false, error: "Only host can continue" });
+    if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot advance the game." });
     if (room.phase !== "reveal" && room.phase !== "reveal_fake") return ack?.({ ok: false, error: "Not in reveal phase" });
 
     const prevRound = room.round;
@@ -615,20 +642,13 @@ io.on("connection", (socket) => {
   socket.on("fake:category:submit", ({ roomCode, playerId, category, word }: { roomCode: string, playerId: string, category: string, word: string }, ack?: (resp: any) => void) => {
     const room = getRoom(roomCode);
     if (!room || room.questionMasterId !== playerId || room.phase !== "category") return ack?.({ ok: false });
+    if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot set the category." });
     room.category = category;
     room.word = word;
     room.phase = "draw_shared";
 
-    // Start drawing rotation: start with the player AFTER the QM
-    const qmIndex = room.playerOrder.indexOf(room.questionMasterId!);
-    const artistsInOrder: string[] = [];
-    for (let i = 1; i <= room.playerOrder.length; i++) {
-      const idx = (qmIndex + i) % room.playerOrder.length;
-      const pid = room.playerOrder[idx]!;
-      if (pid !== room.questionMasterId) {
-        artistsInOrder.push(pid);
-      }
-    }
+    // Start drawing rotation: same order as getFakeArtistArtistOrder
+    const artistsInOrder = getFakeArtistArtistOrder(room);
 
     room.activePlayerId = artistsInOrder[0];
     room.turnNumber = 1;
@@ -639,14 +659,31 @@ io.on("connection", (socket) => {
     ack?.({ ok: true });
   });
 
+  socket.on(
+    "room:toggleSpectator",
+    ({ roomCode, playerId }: { roomCode: string; playerId: string }, ack?: (resp: any) => void) => {
+      const myId = socket.data.playerId as string | undefined;
+      if (!myId || myId !== playerId) return ack?.({ ok: false, error: "You can only change your own spectator mode." });
+      const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
+      if (!room) return ack?.({ ok: false, error: "Room not found" });
+      const res = toggleSpectator(room, playerId);
+      if (!res.ok) return ack?.({ ok: false, error: res.error });
+      ack?.({ ok: true });
+      emitRoom(room.roomCode);
+    }
+  );
+
   socket.on("fake:draw:submit", ({ roomCode, playerId, imageDataUrl }: { roomCode: string, playerId: string, imageDataUrl: string }, ack?: (resp: any) => void) => {
     const room = getRoom(roomCode);
     if (!room || room.activePlayerId !== playerId || room.phase !== "draw_shared") return ack?.({ ok: false });
+    if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false });
 
+    room.fakeArtistStrokeLog ??= [];
+    room.fakeArtistStrokeLog.push({ playerId, snapshotUrl: imageDataUrl });
     room.sharedDrawingUrl = imageDataUrl;
     room.turnNumber++;
 
-    const artists = room.playerOrder.filter(id => id !== room.questionMasterId);
+    const artists = getFakeArtistArtistOrder(room);
     const totalTurnsNeeded = artists.length * 2; // 2 rotations
 
     if (room.turnNumber > totalTurnsNeeded) {
@@ -666,10 +703,11 @@ io.on("connection", (socket) => {
   socket.on("fake:accuse:vote", ({ roomCode, playerId, targetId }: { roomCode: string, playerId: string, targetId: string }, ack?: (resp: any) => void) => {
     const room = getRoom(roomCode);
     if (!room || room.phase !== "accuse" || playerId === room.questionMasterId) return ack?.({ ok: false });
+    if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot vote." });
 
     room.votedForId.set(playerId, targetId);
 
-    const artists = room.playerOrder.filter(id => id !== room.questionMasterId);
+    const artists = getFakeArtistArtistOrder(room);
     if (room.votedForId.size >= artists.length) {
       // Tally votes
       const votes: Record<string, number> = {};
@@ -702,6 +740,7 @@ io.on("connection", (socket) => {
   socket.on("fake:votes:continue", ({ roomCode, playerId }: { roomCode: string, playerId: string }, ack?: (resp: any) => void) => {
     const room = getRoom(roomCode);
     if (!room || room.hostId !== playerId || room.phase !== "fake_votes") return ack?.({ ok: false });
+    if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot continue." });
 
     if (room.isFakeArtistCaught) {
       room.phase = "guess";
@@ -719,6 +758,7 @@ io.on("connection", (socket) => {
   socket.on("fake:guess:submit", ({ roomCode, playerId, guess }: { roomCode: string, playerId: string, guess: string }, ack?: (resp: any) => void) => {
     const room = getRoom(roomCode);
     if (!room || room.phase !== "guess" || playerId !== room.fakeArtistId) return ack?.({ ok: false });
+    if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false });
 
     room.fakeArtistGuess = guess;
     const isCorrect = guess.trim().toLowerCase() === room.word?.trim().toLowerCase();

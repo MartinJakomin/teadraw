@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from "react";
 import type { RoomState } from "../../types";
+import { PlayerOrderStrip } from "../components/PlayerOrderStrip";
+
+function drawfulClueParticipants(room: RoomState, drawerId: string) {
+  return room.players.filter((p) => p.id !== drawerId && !p.isSpectator).length;
+}
 
 export function SubmitScreen(props: {
   room: RoomState;
@@ -15,6 +20,9 @@ export function SubmitScreen(props: {
   const already = useMemo(() => props.submit.submittedBy.includes(props.me.id), [props.me.id, props.submit.submittedBy]);
   const drawer = props.room.players.find((p) => p.id === props.submit.drawerId);
   const drawerName = drawer?.name ?? "Someone";
+  const spectating = Boolean(props.me.isSpectator);
+  const stripIds = props.room.drawingPlayerOrder ?? [];
+  const expectedClues = drawfulClueParticipants(props.room, props.submit.drawerId);
 
   const handleSubmit = () => {
     if (!text.trim() || submitting) return;
@@ -32,7 +40,9 @@ export function SubmitScreen(props: {
         <div className="row space">
           <div>
             <h2>Submit a fake prompt</h2>
-            <div className="muted" style={{ marginTop: "8px" }}>Try to trick people into voting for yours.</div>
+            <div className="muted" style={{ marginTop: "8px" }}>
+              Try to trick people into voting for yours.
+            </div>
           </div>
         </div>
 
@@ -40,12 +50,18 @@ export function SubmitScreen(props: {
           {drawer?.avatarUrl && (
             <img src={drawer.avatarUrl} alt="drawer" className="avatar-small" style={{ border: `2px solid ${drawer.color}` }} />
           )}
-          <div className="muted">Drawing {props.submit.drawingIndex + 1} of {props.submit.totalDrawings} by <b style={{ color: drawer?.color }}>{drawerName}</b></div>
+          <div className="muted">
+            Drawing by <b style={{ color: drawer?.color }}>{drawerName}</b>
+          </div>
         </div>
 
         <img className="img" src={props.submit.imageDataUrl} alt="drawing" />
 
-        {isDrawer ? (
+        {spectating ? (
+          <div className="muted" style={{ marginTop: "1rem" }}>
+            You are spectating — you cannot submit a fake prompt.
+          </div>
+        ) : isDrawer ? (
           <div className="muted">You drew this. Waiting for others to submit fake prompts…</div>
         ) : already ? (
           <div className="muted">Submitted. Waiting for others…</div>
@@ -53,11 +69,14 @@ export function SubmitScreen(props: {
           <>
             <div className="field">
               <label>Your fake prompt</label>
-              <input 
-                value={text} 
-                onChange={(e) => { setText(e.target.value); setError(""); }} 
-                maxLength={80} 
-                placeholder="A duck learning algebra" 
+              <input
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  setError("");
+                }}
+                maxLength={80}
+                placeholder="A duck learning algebra"
                 disabled={submitting}
               />
               {error && <div className="error small">{error}</div>}
@@ -70,8 +89,18 @@ export function SubmitScreen(props: {
           </>
         )}
 
-        <div className="muted small">
-          Submitted: {props.submit.submittedBy.length}/{props.room.players.length - 1}
+        <div style={{ marginTop: "1.5rem" }}>
+          <PlayerOrderStrip
+            players={props.room.players}
+            orderedPlayerIds={stripIds}
+            activePlayerId={props.submit.drawerId}
+          />
+          <div className="muted small" style={{ marginTop: "10px", textAlign: "center" }}>
+            Drawing {props.submit.drawingIndex + 1} of {props.submit.totalDrawings}
+          </div>
+          <div className="muted small" style={{ marginTop: "4px", textAlign: "center" }}>
+            Submitted: {props.submit.submittedBy.length}/{expectedClues}
+          </div>
         </div>
       </div>
     </div>

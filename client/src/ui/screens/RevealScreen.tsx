@@ -47,7 +47,7 @@ export function RevealScreen(props: {
               </div>
             </div>
           </div>
-          {props.isHost ? (
+          {props.isHost && !props.me.isSpectator ? (
             <button className="btn primary" onClick={props.onNext}>
               {props.reveal.drawingIndex >= props.reveal.totalDrawings - 1 && props.room.round >= props.room.totalRounds ? "Finish Game" : (props.reveal.drawingIndex >= props.reveal.totalDrawings - 1 ? "Next Round" : "Next drawing")}
             </button>
