@@ -251,48 +251,51 @@ export const PROMPTS: string[] = [
   "Pug wearing a superhero cape",
   "Lizard playing a tiny violin",
   "Mouse riding a Roomba",
-  "Donut that lost its hole",
-  "Banana peel's revenge",
-  "Snowman in a sauna",
-  "Ghost afraid of the dark",
-  "Mona Lisa with a mustache",
-  "Ninja baking a cake",
-  "Zombie at a salad bar",
-  "Angry piece of toast",
-  "Sloth rushing to work",
-  "Spider afraid of heights",
-  "Cow jumping over a skyscraper",
-  "Werewolf checking their phone",
-  "Turtle doing a kickflip",
-  "Skunk selling perfume",
-  "Pineapple going to school",
-  "Cactus wearing mittens",
-  "Pizza slice playing catch",
-  "Shark waterskiing",
-  "Giraffe reading a bedtime story",
-  "Cat driving a fire truck",
-  "Lizard putting on lipstick",
-  "Grumpy traffic cone",
-  "Teacup with legs",
-  "Crying crayon",
-  "Lightbulb with a bad hair day",
-  "Marshmallow roasting itself",
-  "Taco with a mustache",
-  "Balloon afraid of needles",
-  "Compass pointing only to pizza",
-  "Clock going backwards",
-  "Telescope looking at itself",
-  "Violin playing heavy metal",
-  "Whistle making bubbles",
-  "Hammer thinking it's a screwdriver",
-  "Electric scooter for squirrels",
-  "Segway tour for sloths",
-  "Unicycle balance for bears",
-  "Pogo stick for penguins",
-  "Trampoline jump for turtles",
-  "Parachute dive for pigs",
-  "Hot air balloon for hamsters",
-  "Helicopter spin for hedgehogs"
+  "A hotdog trying to blend in at a burger joint",
+  "An owl wearing reading glasses",
+  "A cactus getting a haircut",
+  "A snowglobe with a desert inside",
+  "A refrigerator running a marathon",
+  "An astronaut stepping on a lego piece",
+  "A vampire with a sunburn",
+  "A toaster that shoots waffles",
+  "A T-Rex trying to make a bed",
+  "A pigeon reviewing a restaurant",
+  "A plant watering a human",
+  "A worm driving an apple car",
+  "A cloud afraid of heights",
+  "A bowling ball on strike",
+  "A ghost sheet caught in the laundry",
+  "A slice of pizza riding a skateboard",
+  "A camel carrying a swimming pool",
+  "A tree climbing a squirrel",
+  "A skeleton drinking milk",
+  "A book reading a human",
+  "A computer using a mouse",
+  "A snowman buying a heater",
+  "A fish riding a bicycle underwater",
+  "A banana slipping on a human",
+  "A potato winning a beauty contest",
+  "A dinosaur trying to use chopsticks",
+  "A cloud dropping an anvil instead of rain",
+  "A pirate returning a library book",
+  "A snail competing in Formula 1",
+  "A cactus selling free hugs",
+  "An octopus untangling headphones",
+  "A bear trying to assemble IKEA furniture",
+  "A superhero stuck in a revolving door",
+  "A ghost trying to scare a roomba",
+  "A cheese wheel rolling downhill",
+  "A pencil getting a haircut",
+  "A sloth participating in a rap battle",
+  "A jellyfish learning to juggle",
+  "A toaster scared of bread",
+  "A mushroom attending a business meeting",
+  "A cat trying to herd sheep",
+  "A vampire checking themselves in a mirror",
+  "A spider knitting a sweater",
+  "An alien trying to eat spaghetti",
+  "A penguin building a sandcastle"
 ];
 
 export function pickPrompts(count: number, usedPrompts?: Set<string>): string[] {
@@ -300,14 +303,14 @@ export function pickPrompts(count: number, usedPrompts?: Set<string>): string[] 
   if (usedPrompts) {
     pool = pool.filter(p => !usedPrompts.has(p));
   }
-  
+
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  
+
   while (pool.length < count) pool.push(...PROMPTS);
-  
+
   const picked = pool.slice(0, count);
   if (usedPrompts) {
     for (const p of picked) usedPrompts.add(p);

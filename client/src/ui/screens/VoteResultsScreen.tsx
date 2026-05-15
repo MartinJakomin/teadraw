@@ -26,11 +26,11 @@ export function VoteResultsScreen(props: {
             <h1 className="title">Voting Results</h1>
             <div className="muted">Who suspected whom?</div>
           </div>
-          {props.isHost && (
+          {props.isHost && !props.me.isSpectator ? (
             <button className="btn primary" onClick={props.onContinue}>
               Continue
             </button>
-          )}
+          ) : null}
         </div>
 
         <div className="list" style={{ marginTop: "2rem" }}>

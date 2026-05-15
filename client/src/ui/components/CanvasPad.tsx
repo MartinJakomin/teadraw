@@ -31,6 +31,8 @@ export function CanvasPad(props: {
   const [hasDrawn, setHasDrawn] = useState(false);
   const [color, setColor] = useState(props.initialColor ?? "#111111");
   const [size, setSize] = useState(strokeWidth);
+  const strokeMovedRef = useRef(false);
+  const strokeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const colors = [
     "#000000", "#555555", "#aaaaaa", "#ffffff",
@@ -42,7 +44,7 @@ export function CanvasPad(props: {
 
   const getShades = (hex: string, shadesOnly = false) => {
     if (hex === "#FFFFFF" || hex === "#000000") return ["#000000", "#333333", "#666666", "#999999", "#CCCCCC", "#FFFFFF"];
-    
+
     if (!shadesOnly) return [hex, "#FFFFFF"];
 
     const adjust = (color: string, amount: number) => {
@@ -75,19 +77,23 @@ export function CanvasPad(props: {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    
+
     if (props.initialDataUrl) {
       const img = new Image();
       img.onload = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0);
         setHasDrawn(false);
+        strokeMovedRef.current = false;
+        strokeStartRef.current = null;
       };
       img.src = props.initialDataUrl;
     } else {
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       setHasDrawn(false);
+      strokeMovedRef.current = false;
+      strokeStartRef.current = null;
     }
   }, [props.initialDataUrl]);
 
@@ -103,15 +109,17 @@ export function CanvasPad(props: {
     const onDown = (evt: PointerEvent) => {
       if (props.disabled) return;
       drawing = true;
+      strokeMovedRef.current = false;
       canvas.setPointerCapture(evt.pointerId);
       const p = getCanvasPos(evt, canvas);
-      
+      strokeStartRef.current = p;
+
       // Setup drawing styles for this stroke
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = color;
       ctx.lineWidth = size;
-      
+
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
     };
@@ -119,6 +127,11 @@ export function CanvasPad(props: {
     const onMove = (evt: PointerEvent) => {
       if (!drawing) return;
       const p = getCanvasPos(evt, canvas);
+      const st = strokeStartRef.current;
+      if (st) {
+        const dist = Math.hypot(p.x - st.x, p.y - st.y);
+        if (dist > 2) strokeMovedRef.current = true;
+      }
       ctx.lineTo(p.x, p.y);
       ctx.stroke();
 
@@ -127,15 +140,16 @@ export function CanvasPad(props: {
     };
 
     const onUp = (evt: PointerEvent) => {
-      if (drawing && props.oneStrokeMode && canvasRef.current) {
-        // Auto submit after one stroke
+      if (drawing && props.oneStrokeMode && canvasRef.current && strokeMovedRef.current) {
+        // Auto submit after one stroke with real movement
         const url = canvasRef.current.toDataURL("image/png");
         props.onSubmit(url);
       }
       drawing = false;
+      strokeStartRef.current = null;
       try {
         canvas.releasePointerCapture(evt.pointerId);
-      } catch {}
+      } catch { }
     };
 
     canvas.addEventListener("pointerdown", onDown);
@@ -161,6 +175,8 @@ export function CanvasPad(props: {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     setHasDrawn(false);
+    strokeMovedRef.current = false;
+    strokeStartRef.current = null;
     props.onChange?.();
   };
 
@@ -200,12 +216,12 @@ export function CanvasPad(props: {
             </div>
             <div className="size-picker">
               <label>Size:</label>
-              <input 
-                type="range" 
-                min="2" 
-                max="40" 
-                value={size} 
-                onChange={(e) => setSize(Number(e.target.value))} 
+              <input
+                type="range"
+                min="2"
+                max="40"
+                value={size}
+                onChange={(e) => setSize(Number(e.target.value))}
               />
             </div>
           </div>

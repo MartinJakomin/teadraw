@@ -146,7 +146,8 @@ input:focus {
   letter-spacing: 2px;
   text-transform: uppercase;
   box-shadow: 0 0 20px rgba(124, 92, 255, 0.2);
-  margin-bottom: 2rem; /* Added spacing */
+  margin-bottom: 2rem;
+  /* Added spacing */
 }
 
 .list {
@@ -195,7 +196,8 @@ input:focus {
 .canvas {
   width: 100%;
   height: auto;
-  max-height: 65vh; /* Prevent vertical overflow */
+  max-height: 65vh;
+  /* Prevent vertical overflow */
   touch-action: none;
   display: block;
   object-fit: contain;
@@ -275,6 +277,7 @@ input:focus {
   .grid {
     grid-template-columns: 1fr;
   }
+
   .title {
     font-size: 34px;
   }
@@ -296,7 +299,8 @@ input:focus {
 
 .sidebar {
   width: 380px;
-  background: rgba(15, 23, 42, 0.95); /* Darker shade */
+  background: rgba(15, 23, 42, 0.95);
+  /* Darker shade */
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   padding: 24px;
   display: flex;
@@ -338,8 +342,13 @@ input:focus {
 }
 
 @keyframes pulse {
-  0% { transform: scale(1); }
-  100% { transform: scale(1.05); }
+  0% {
+    transform: scale(1);
+  }
+
+  100% {
+    transform: scale(1.05);
+  }
 }
 
 .sidebar-players {
@@ -348,7 +357,8 @@ input:focus {
   gap: 12px;
   flex: 1;
   overflow-y: auto;
-  padding-right: 8px; /* Room for scrollbar */
+  padding-right: 8px;
+  /* Room for scrollbar */
 }
 
 .sidebar-player {
@@ -464,7 +474,8 @@ input:focus {
 
 .size-picker input[type="range"] {
   accent-color: var(--primary2);
-  flex: 1; /* Go to full width */
+  flex: 1;
+  /* Go to full width */
   min-width: 100px;
 }
 
@@ -516,6 +527,7 @@ input:focus {
   .layout-split {
     flex-direction: column;
   }
+
   .sidebar {
     width: 100%;
     border-left: none;
@@ -533,17 +545,30 @@ input:focus {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .card {
-  width: min(1100px, 100%); /* Increased from 1000px */
+  width: min(1100px, 100%);
+  /* Increased from 1000px */
   background: linear-gradient(180deg, var(--card), rgba(255, 255, 255, 0.05));
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 18px;
@@ -563,8 +588,13 @@ input:focus {
 }
 
 @keyframes phaseFlash {
-  0% { opacity: 0.5; }
-  100% { opacity: 0; }
+  0% {
+    opacity: 0.5;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }
 
 .transition-group {
@@ -590,9 +620,17 @@ input:focus {
   text-align: center;
 }
 
-.spot-1 { order: 2; }
-.spot-2 { order: 1; }
-.spot-3 { order: 3; }
+.spot-1 {
+  order: 2;
+}
+
+.spot-2 {
+  order: 1;
+}
+
+.spot-3 {
+  order: 3;
+}
 
 .podium-avatar-wrap {
   position: relative;
@@ -824,7 +862,11 @@ input:focus {
   line-height: 1.4;
 }
 
-.tag.fake { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+.tag.fake {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
 
 /* DISCONNECT OVERLAY */
 .disconnect-overlay {
@@ -862,5 +904,149 @@ input:focus {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Player order strip (Fake Artist + Drawful) */
+.player-order-strip {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 4px 12px;
+  margin-top: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.player-order-strip-inner {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  min-width: min-content;
+}
+
+.player-order-chip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.player-order-strip .player-order-chip.player-order-chip-active {
+  border: 1px solid #fff !important;
+  z-index: 2;
+}
+
+.player-order-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.player-order-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Fake Artist — accuse */
+.accuse-banner {
+  margin-top: 1rem;
+  padding: 12px 18px;
+  border-radius: 12px;
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #fff;
+  background: rgba(124, 92, 255, 0.35);
+  border: 2px solid rgba(200, 180, 255, 0.85);
+  box-shadow: 0 0 20px rgba(124, 92, 255, 0.45);
+}
+
+.accuse-drawing-wrap {
+  width: 100%;
+  margin: 1.5rem 0;
+  border-radius: 14px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.accuse-drawing-wrap-selected {
+  padding: 3px;
+  border: 3px solid var(--accuse-selection, rgba(255, 255, 255, 0.7));
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Stack: base defines size; overlay matches that exact box (no .img border mismatch). */
+.accuse-drawing-stack {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  margin: 0 auto;
+  line-height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.accuse-drawing-stack .accuse-base-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 65vh;
+  border: none;
+  background: transparent;
+}
+
+.accuse-drawing-stack .accuse-stroke-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px var(--accuse-selection, #fff)) drop-shadow(0 0 8px var(--accuse-selection, #fff));
+}
+
+.accuse-target-btn.accuse-target-btn-glow {
+  border-color: rgba(255, 255, 255, 0.55) !important;
+  box-shadow:
+    0 0 0 3px rgba(120, 200, 255, 0.95),
+    0 0 28px rgba(120, 200, 255, 0.55),
+    inset 0 0 20px rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+.accuse-target-btn.accuse-target-btn-picked {
+  border-width: 3px !important;
+  border-color: rgba(255, 220, 120, 0.95) !important;
+  background: rgba(255, 200, 80, 0.2) !important;
+  box-shadow:
+    0 0 0 2px rgba(255, 200, 80, 0.5),
+    0 0 24px rgba(255, 200, 100, 0.45) !important;
+}
+
+.spectator-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+  padding: 10px 16px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #fff;
+  background: linear-gradient(90deg, rgba(80, 120, 200, 0.35), rgba(120, 80, 180, 0.35));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
 }
