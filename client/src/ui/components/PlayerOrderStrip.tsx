@@ -17,9 +17,9 @@ export function PlayerOrderStrip(props: {
 
   const maxVisible = 10;
   const total = props.orderedPlayerIds.length;
-  
-  let activeIdx = typeof props.activeSlotIndex === "number" 
-    ? props.activeSlotIndex 
+
+  let activeIdx = typeof props.activeSlotIndex === "number"
+    ? props.activeSlotIndex
     : Math.max(0, props.orderedPlayerIds.findIndex(id => id === props.activePlayerId));
 
   let start = 0;
@@ -29,7 +29,7 @@ export function PlayerOrderStrip(props: {
     const half = Math.floor(maxVisible / 2);
     start = Math.max(0, activeIdx - half);
     end = start + maxVisible;
-    
+
     if (end > total) {
       end = total;
       start = Math.max(0, total - maxVisible);
@@ -38,7 +38,7 @@ export function PlayerOrderStrip(props: {
 
   const showStartDots = start > 0;
   const showEndDots = end < total;
-  
+
   const visibleItems = props.orderedPlayerIds
     .map((id, index) => ({ id, index }))
     .slice(start, end);
@@ -51,7 +51,7 @@ export function PlayerOrderStrip(props: {
             ...
           </div>
         )}
-        
+
         {visibleItems.map(({ id, index }) => {
           const p = byId.get(id);
           if (!p) return null;
@@ -59,7 +59,7 @@ export function PlayerOrderStrip(props: {
             typeof props.activeSlotIndex === "number"
               ? index === props.activeSlotIndex
               : Boolean(props.activePlayerId && props.activePlayerId === id);
-              
+
           return (
             <div
               key={`${id}-${index}`}
