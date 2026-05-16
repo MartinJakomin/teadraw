@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import type { RoomState } from "../../types";
+import { SERVER_URL } from "../../net/socket";
 
 import logoUrl from "../../../media/logo-transparent.png";
 
@@ -8,6 +9,22 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
   const mePlayer = room.players.find((p) => p.id === meId);
   const isHost = room.hostId === meId;
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const doHealthCheck = async () => {
+      try {
+        await fetch(`${SERVER_URL}/health?playerId=${meId}`);
+        setLastHealthCheck(new Date());
+      } catch (err) {
+        console.error("Healthcheck failed", err);
+      }
+    };
+    doHealthCheck();
+    // 5 minutes
+    const interval = setInterval(doHealthCheck, 300_000);
+    return () => clearInterval(interval);
+  }, [meId]);
 
   useEffect(() => {
     if (!room.endTime) {
@@ -55,11 +72,11 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
 
   return (
     <div className="sidebar">
-      <div style={{ 
-        textAlign: "center", 
-        marginBottom: "20px", 
-        background: "rgba(255, 255, 255, 0.12)", 
-        borderRadius: "20px", 
+      <div style={{
+        textAlign: "center",
+        marginBottom: "20px",
+        background: "rgba(255, 255, 255, 0.12)",
+        borderRadius: "20px",
         padding: "16px",
         backdropFilter: "blur(10px)",
         border: "1px solid rgba(255, 255, 255, 0.1)",
@@ -67,7 +84,7 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
       }}>
         <img src={logoUrl} alt="TeaDraw Logo" style={{ maxWidth: "240px", width: "100%" }} />
       </div>
-      <div className="sidebar-actions" style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+      <div className="sidebar-actions" style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
         <button
           className="btn"
           style={{ flex: 1 }}
@@ -92,6 +109,18 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
             Stop
           </button>
         )}
+        <div
+          style={{
+            width: "10px",
+            height: "10px",
+            borderRadius: "50%",
+            backgroundColor: "#2ecc71",
+            boxShadow: "0 0 8px #2ecc71",
+            flexShrink: 0,
+            cursor: "help"
+          }}
+          title={lastHealthCheck ? `Last healthcheck: ${lastHealthCheck.toLocaleTimeString()}` : "Connecting..."}
+        />
       </div>
 
       <div className="sidebar-header">

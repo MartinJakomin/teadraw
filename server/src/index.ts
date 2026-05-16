@@ -70,8 +70,12 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
 
 const app = express();
 app.use(cors({ origin: CLIENT_ORIGIN, credentials: true }));
-app.get("/health", (_req, res) => res.json({ ok: true }));
-
+app.get("/health", (req, res) => {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const playerId = req.query.playerId;
+  console.log(`[HealthCheck] IP: ${ip} | Player: ${playerId || 'unknown'}`);
+  res.json({ ok: true });
+});
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 // Root dir is two levels up from server/src or server/dist
@@ -429,6 +433,10 @@ io.on("connection", (socket) => {
       socket.join(code);
       socket.data.roomCode = code;
       socket.data.playerId = newPlayer.id;
+      
+      const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+      console.log(`[Player Join] Room: ${code} | Name: ${newPlayer.name} | ID: ${newPlayer.id} | IP: ${ip}`);
+      
       ack?.({ ok: true, roomCode: code, playerId: newPlayer.id });
       emitRoom(code);
     }
@@ -458,6 +466,8 @@ io.on("connection", (socket) => {
 
       // Reset scores on a fresh start from game_over as well
       for (const p of room.playersById.values()) p.score = 0;
+      
+      console.log(`[Game Start] Room: ${room.roomCode} | Type: ${gameType || room.gameType || "drawful"} | Players: ${listPlayers(room).length}`);
 
       const botCount = room.botCount || 0;
       for (const [id, p] of room.playersById.entries()) {

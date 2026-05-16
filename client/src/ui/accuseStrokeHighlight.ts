@@ -87,13 +87,14 @@ export async function buildAccusedStrokesOverlay(
         const g2 = curData.data[i + 1]!;
         const b2 = curData.data[i + 2]!;
 
-        // Compare consecutive steps. A threshold of > 25 ignores normal rendering noise
-        // while capturing intentional strokes.
+        // Compare consecutive steps. A threshold > 5 ignores minor JPEG/canvas artifacts
+        // while capturing even very faint anti-aliased edges of intentional strokes.
         const diff = Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2);
 
-        if (diff > 25) {
+        if (diff > 5) {
           // This pixel was drawn (or drawn over) during this player's turn!
-          const alpha = Math.min(255, Math.round(diff * 1.2));
+          // Multiply by a larger factor to ensure even faint edges become highly visible
+          const alpha = Math.min(255, Math.round(diff * 5));
           
           const pixelIndex = y * w + x;
           // Claim ownership of this pixel for this player
