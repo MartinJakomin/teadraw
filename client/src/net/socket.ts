@@ -1,5 +1,5 @@
 import { io, Socket } from "socket.io-client";
-import type { RoomState } from "../types";
+import type { RoomState, StrokeEvent } from "../types";
 
 export const SERVER_URL = import.meta.env.VITE_SERVER_URL ??
   (import.meta.env.DEV ? "http://localhost:3000" : window.location.origin);
@@ -16,7 +16,7 @@ export type ClientToServerEvents = {
   "room:updateSettings": (payload: { roomCode: string; playerId: string } & Record<string, any>) => void;
   "avatar:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string; color: string; }) => void;
   "fake:category:submit": (payload: { roomCode: string; playerId: string; category: string; word: string; }) => void;
-  "fake:draw:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string; }) => void;
+  "fake:draw:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string; strokes: StrokeEvent[]; }) => void;
   "fake:accuse:vote": (payload: { roomCode: string; playerId: string; targetId: string; }) => void;
   "fake:votes:continue": (payload: { roomCode: string; playerId: string; }) => void;
   "fake:guess:submit": (payload: { roomCode: string; playerId: string; guess: string; }) => void;

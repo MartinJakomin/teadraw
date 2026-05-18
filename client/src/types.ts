@@ -1,4 +1,14 @@
 export type PlayerId = string;
+export type StrokePoint = { x: number; y: number };
+export type StrokeEvent = {
+  id: string;
+  playerId: string;
+  points: StrokePoint[];
+  brushSize: number;
+  color: { r: number; g: number; b: number };
+  opacity: number;
+  timestamp: number;
+};
 
 export type Phase =
   | "lobby"
@@ -62,7 +72,7 @@ export type RoomState = {
     activePlayerId?: PlayerId;
     turnNumber: number;
     sharedDrawingUrl?: string;
-    strokeLog?: Array<{ playerId: PlayerId; snapshotUrl: string }>;
+    strokeLog?: StrokeEvent[];
     votedForId?: Record<PlayerId, PlayerId>;
     isFakeArtistCaught?: boolean;
     fakeArtistGuess?: string;

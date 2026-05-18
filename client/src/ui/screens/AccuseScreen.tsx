@@ -36,18 +36,18 @@ export function AccuseScreen(props: {
 
   useEffect(() => {
     let cancelled = false;
-    if (!highlightId || !strokeLog?.length || !highlightPlayer || !props.room.fakeArtistHighlight) {
+    if (!highlightId || !strokeLog?.length || !highlightPlayer) {
       setStrokeOverlayUrl(null);
       return;
     }
+
+    // Generate main highlight overlay
     const tint = parseHexColor(highlightPlayer.color);
     buildAccusedStrokesOverlay(strokeLog, highlightId, tint)
       .then((url) => {
         if (!cancelled) setStrokeOverlayUrl(url);
-      })
-      .catch(() => {
-        if (!cancelled) setStrokeOverlayUrl(null);
       });
+
     return () => {
       cancelled = true;
     };
@@ -81,7 +81,7 @@ export function AccuseScreen(props: {
           <div className="accuse-drawing-stack">
             <img
               className="accuse-base-img"
-              style={{ opacity: strokeOverlayUrl ? 0.35 : 1, transition: 'opacity 0.2s' }}
+              style={{ opacity: strokeOverlayUrl ? 0.12 : 1, transition: "opacity 0.2s" }}
               src={props.fake.sharedDrawingUrl}
               alt="shared drawing"
             />

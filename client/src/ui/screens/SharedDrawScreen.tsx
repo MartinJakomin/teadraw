@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import type { RoomState } from "../../types";
+import type { RoomState, StrokeEvent } from "../../types";
 import { CanvasPad } from "../components/CanvasPad";
 import { PlayerOrderStrip } from "../components/PlayerOrderStrip";
 import { fakeArtistArtistIds } from "../fakeArtistOrder";
@@ -8,7 +8,7 @@ export function SharedDrawScreen(props: {
   room: RoomState;
   me: RoomState["players"][number];
   fake: NonNullable<RoomState["fakeArtist"]>;
-  onSubmit: (dataUrl: string) => void;
+  onSubmit: (dataUrl: string, strokes: StrokeEvent[]) => void;
 }) {
   const isQM = props.fake.questionMasterId === props.me.id;
   const isFakeArtist = props.fake.fakeArtistId === props.me.id;
@@ -75,14 +75,15 @@ export function SharedDrawScreen(props: {
 
         <div className="canvas-shared-wrap">
           <CanvasPad
+            playerId={props.me.id}
             initialDataUrl={props.fake.sharedDrawingUrl}
             initialColor={props.me.color}
             allowedColor={props.me.color}
             disabled={!isActive || isQM || spectating}
             oneStrokeMode={true}
-            onSubmit={(url) => {
+            onSubmit={(url, strokes) => {
               if (!url) return;
-              props.onSubmit(url);
+              props.onSubmit(url, strokes);
             }}
             submitText="Finish my stroke"
           />

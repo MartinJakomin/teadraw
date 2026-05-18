@@ -1,5 +1,15 @@
 export type RoomCode = string;
 export type PlayerId = string;
+export type StrokePoint = { x: number; y: number };
+export type StrokeEvent = {
+  id: string;
+  playerId: string;
+  points: StrokePoint[];
+  brushSize: number;
+  color: { r: number; g: number; b: number };
+  opacity: number;
+  timestamp: number;
+};
 
 export type Phase = "lobby" | "avatar" | "draw" | "submit" | "vote" | "reveal" | "game_over" | "category" | "draw_shared" | "accuse" | "fake_votes" | "guess" | "reveal_fake";
 
@@ -93,8 +103,8 @@ export type RoomStatePublic = {
     activePlayerId?: PlayerId;
     turnNumber: number;
     sharedDrawingUrl?: string;
-    /** Present during accuse: one full snapshot per stroke in order (large payload). */
-    strokeLog?: Array<{ playerId: PlayerId; snapshotUrl: string }>;
+    /** Present during accuse: full list of authoritative strokes. */
+    strokeLog?: StrokeEvent[];
     votedForId?: Record<PlayerId, PlayerId>;
     isFakeArtistCaught?: boolean;
     fakeArtistGuess?: string;

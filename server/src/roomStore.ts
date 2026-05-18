@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import type { Drawing, Option, Phase, Player, PlayerId, Reveal, RoomCode, RoomStatePublic } from "./gameTypes.js";
+import type { Drawing, Option, Phase, Player, PlayerId, Reveal, RoomCode, RoomStatePublic, StrokeEvent } from "./gameTypes.js";
 import { pickPrompts } from "./prompts.js";
 
 /** Non-spectators in join order (includes disconnected). */
@@ -83,8 +83,8 @@ type Room = {
   activePlayerId?: PlayerId;
   turnNumber: number;
   sharedDrawingUrl?: string;
-  /** After each stroke: full canvas snapshot + drawer (sent to clients in accuse phase for per-player highlight). */
-  fakeArtistStrokeLog: Array<{ playerId: PlayerId; snapshotUrl: string }>;
+  /** Authoritative list of strokes for highlighting. */
+  fakeArtistStrokeLog: StrokeEvent[];
   votedForId: Map<PlayerId, PlayerId>;
   isFakeArtistCaught?: boolean;
   fakeArtistGuess?: string;
@@ -242,7 +242,7 @@ export function toPublicState(room: Room): RoomStatePublic {
       pointsDeltaByPlayer: Object.fromEntries(room.pointsDeltaByPlayer.entries())
     };
     if (room.phase === "accuse" && room.fakeArtistStrokeLog.length > 0) {
-      fa.strokeLog = room.fakeArtistStrokeLog.map((e) => ({ playerId: e.playerId, snapshotUrl: e.snapshotUrl }));
+      fa.strokeLog = room.fakeArtistStrokeLog;
     }
     base.fakeArtist = fa;
   }

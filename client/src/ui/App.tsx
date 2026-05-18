@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { RoomState } from "../types";
+import type { RoomState, StrokeEvent } from "../types";
 import { getSocket } from "../net/socket";
 import { DrawScreen } from "./screens/DrawScreen";
 import { HomeScreen } from "./screens/HomeScreen";
@@ -296,7 +296,7 @@ export function App() {
             room={room}
             me={me}
             fake={room.fakeArtist}
-            onSubmit={(url) => socket.emit("fake:draw:submit", { roomCode: room.roomCode, playerId, imageDataUrl: url })}
+            onSubmit={(url, strokes) => socket.emit("fake:draw:submit", { roomCode: room.roomCode, playerId, imageDataUrl: url, strokes })}
           />
         );
 

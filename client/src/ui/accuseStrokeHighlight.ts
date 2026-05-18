@@ -1,130 +1,140 @@
-/** Build a PNG data URL: only pixels added on strokes by `accusedPlayerId`, tinted for overlay. */
+import { StrokeEvent } from "../types";
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const im = new Image();
-    im.crossOrigin = "anonymous";
-    im.onload = () => resolve(im);
-    im.onerror = () => reject(new Error("Failed to load image"));
-    im.src = src;
-  });
-}
-
-function createWhiteImageData(w: number, h: number): ImageData {
-  const data = new Uint8ClampedArray(w * h * 4);
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = 255;
-    data[i + 1] = 255;
-    data[i + 2] = 255;
-    data[i + 3] = 255;
-  }
-  return new ImageData(data, w, h);
-}
-
-function drawToImageData(img: HTMLImageElement, targetW: number, targetH: number): ImageData {
-  const c = document.createElement("canvas");
-  c.width = targetW;
-  c.height = targetH;
-  const ctx = c.getContext("2d");
-  if (!ctx) throw new Error("no ctx");
-  // Ensure we have a solid white background to compare against
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, targetW, targetH);
-  ctx.drawImage(img, 0, 0, targetW, targetH);
-  return ctx.getImageData(0, 0, targetW, targetH);
-}
+/** Build a PNG data URL: only pixels owned by `accusedPlayerId` based on authoritative stroke tracking. */
 
 export function parseHexColor(hex: string): { r: number; g: number; b: number } {
   const h = hex.replace("#", "").trim();
+  let r = 255, g = 220, b = 90;
   if (h.length === 3) {
-    return {
-      r: parseInt(h[0]! + h[0]!, 16),
-      g: parseInt(h[1]! + h[1]!, 16),
-      b: parseInt(h[2]! + h[2]!, 16)
-    };
+    r = parseInt(h[0]! + h[0]!, 16);
+    g = parseInt(h[1]! + h[1]!, 16);
+    b = parseInt(h[2]! + h[2]!, 16);
+  } else if (h.length >= 6) {
+    r = parseInt(h.slice(0, 2), 16);
+    g = parseInt(h.slice(2, 4), 16);
+    b = parseInt(h.slice(4, 6), 16);
   }
-  if (h.length >= 6) {
-    return {
-      r: parseInt(h.slice(0, 2), 16),
-      g: parseInt(h.slice(2, 4), 16),
-      b: parseInt(h.slice(4, 6), 16)
-    };
+  return {
+    r: isNaN(r) ? 255 : r,
+    g: isNaN(g) ? 220 : g,
+    b: isNaN(b) ? 90 : b
+  };
+}
+
+function distanceSqToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const l2 = dx * dx + dy * dy;
+  if (l2 === 0) return (px - x1) ** 2 + (py - y1) ** 2;
+  let t = ((px - x1) * dx + (py - y1) * dy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return (px - (x1 + t * dx)) ** 2 + (py - (y1 + t * dy)) ** 2;
+}
+
+function rasterizeStrokeInto(
+  stroke: StrokeEvent,
+  ownerBuffer: Int32Array,
+  alphaBuffer: Uint8Array,
+  strokeIndex: number,
+  width: number,
+  height: number
+) {
+  const { points, brushSize } = stroke;
+  if (points.length === 0) return;
+
+  const radius = brushSize / 2;
+
+  // If only one point, treat as a tiny segment
+  const segments = points.length === 1
+    ? [{ p1: points[0]!, p2: points[0]! }]
+    : points.slice(0, -1).map((p, i) => ({ p1: p, p2: points[i + 1]! }));
+
+  for (const { p1, p2 } of segments) {
+    const minX = Math.floor(Math.min(p1.x, p2.x) - radius - 1);
+    const maxX = Math.ceil(Math.max(p1.x, p2.x) + radius + 1);
+    const minY = Math.floor(Math.min(p1.y, p2.y) - radius - 1);
+    const maxY = Math.ceil(Math.max(p1.y, p2.y) + radius + 1);
+
+    const startX = Math.max(0, minX);
+    const endX = Math.min(width - 1, maxX);
+    const startY = Math.max(0, minY);
+    const endY = Math.min(height - 1, maxY);
+
+    for (let y = startY; y <= endY; y++) {
+      for (let x = startX; x <= endX; x++) {
+        // 4x Super-sampling (SSAA) for extreme precision
+        const samples = [
+          { dx: 0.25, dy: 0.25 },
+          { dx: 0.75, dy: 0.25 },
+          { dx: 0.25, dy: 0.75 },
+          { dx: 0.75, dy: 0.75 },
+        ];
+
+        let totalAlpha = 0;
+        for (const s of samples) {
+          const dSq = distanceSqToSegment(x + s.dx, y + s.dy, p1.x, p1.y, p2.x, p2.y);
+          if (dSq <= radius ** 2) {
+            const d = Math.sqrt(dSq);
+            let a = 1.0;
+            if (d > radius - 0.5) {
+              a = 1.0 - (d - (radius - 0.5)) / 1.5;
+              a = Math.max(0, Math.min(1, a));
+            }
+            totalAlpha += a;
+          }
+        }
+
+        if (totalAlpha > 0) {
+          const idx = y * width + x;
+          const finalAlpha = Math.round((totalAlpha / 4) * 255);
+
+          // Latest stroke wins (Z-order)
+          ownerBuffer[idx] = strokeIndex;
+          alphaBuffer[idx] = finalAlpha;
+        }
+      }
+    }
   }
-  return { r: 255, g: 220, b: 90 };
 }
 
 export async function buildAccusedStrokesOverlay(
-  strokeLog: Array<{ playerId: string; snapshotUrl: string }>,
+  strokeLog: StrokeEvent[],
   accusedPlayerId: string,
   tint: { r: number; g: number; b: number }
 ): Promise<string | null> {
-  if (!strokeLog.length) return null;
+  if (!strokeLog || !strokeLog.length) return null;
 
   const w = 900;
   const h = 550;
 
-  // Arrays to act as a Z-buffer, tracking who owns which pixel in the final image
-  // and what the stroke's alpha should be.
-  const ownerMap = new Array<string | null>(w * h).fill(null);
-  const alphaMap = new Uint8Array(w * h);
+  // ownerBuffer tracks which stroke (by index) owns the pixel. -1 means no owner.
+  const ownerBuffer = new Int32Array(w * h).fill(-1);
+  const alphaBuffer = new Uint8Array(w * h);
 
-  let prevData = createWhiteImageData(w, h);
-
-  for (let s = 0; s < strokeLog.length; s++) {
-    const step = strokeLog[s]!;
-    const curImg = await loadImage(step.snapshotUrl);
-    const curData = drawToImageData(curImg, w, h);
-
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const i = (y * w + x) * 4;
-
-        const r1 = prevData.data[i]!;
-        const g1 = prevData.data[i + 1]!;
-        const b1 = prevData.data[i + 2]!;
-
-        const r2 = curData.data[i]!;
-        const g2 = curData.data[i + 1]!;
-        const b2 = curData.data[i + 2]!;
-
-        // Compare consecutive steps. A threshold > 5 ignores minor JPEG/canvas artifacts
-        // while capturing even very faint anti-aliased edges of intentional strokes.
-        const diff = Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2);
-
-        if (diff > 5) {
-          // This pixel was drawn (or drawn over) during this player's turn!
-          // Multiply by a larger factor to ensure even faint edges become highly visible
-          const alpha = Math.min(255, Math.round(diff * 5));
-          
-          const pixelIndex = y * w + x;
-          // Claim ownership of this pixel for this player
-          ownerMap[pixelIndex] = step.playerId;
-          alphaMap[pixelIndex] = alpha;
-        }
-      }
-    }
-    prevData = curData;
+  // Process all strokes in order (authoritative Z-order)
+  for (let i = 0; i < strokeLog.length; i++) {
+    rasterizeStrokeInto(strokeLog[i]!, ownerBuffer, alphaBuffer, i, w, h);
   }
 
-  // Now build the final transparent overlay containing ONLY the visible pixels
-  // owned by the accused player.
+  // Now build the final transparent overlay
   const outC = document.createElement("canvas");
   outC.width = w;
   outC.height = h;
   const octx = outC.getContext("2d");
   if (!octx) return null;
-  
-  const outData = new ImageData(w, h);
 
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const pixelIndex = y * w + x;
-      if (ownerMap[pixelIndex] === accusedPlayerId) {
-        const i = pixelIndex * 4;
-        outData.data[i] = tint.r;
-        outData.data[i + 1] = tint.g;
-        outData.data[i + 2] = tint.b;
-        outData.data[i + 3] = alphaMap[pixelIndex]!;
+  const outData = octx.createImageData(w, h);
+
+  for (let i = 0; i < w * h; i++) {
+    const strokeIdx = ownerBuffer[i];
+    if (strokeIdx !== -1) {
+      const stroke = strokeLog[strokeIdx]!;
+      if (stroke.playerId === accusedPlayerId) {
+        const targetIdx = i * 4;
+        outData.data[targetIdx] = tint.r;
+        outData.data[targetIdx + 1] = tint.g;
+        outData.data[targetIdx + 2] = tint.b;
+        outData.data[targetIdx + 3] = alphaBuffer[i]!;
       }
     }
   }
@@ -132,3 +142,4 @@ export async function buildAccusedStrokesOverlay(
   octx.putImageData(outData, 0, 0);
   return outC.toDataURL("image/png");
 }
+

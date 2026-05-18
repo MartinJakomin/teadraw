@@ -45,6 +45,7 @@ export function DrawScreen(props: {
           <div className="muted">Submitted. Waiting for others…</div>
         ) : (
           <CanvasPad
+            playerId={props.me.id}
             initialColor={props.me.color}
             allowedColor={props.me.color}
             showShades={true}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { StrokeEvent, StrokePoint } from "../../types";
 
-function getCanvasPos(evt: PointerEvent, canvas: HTMLCanvasElement) {
+function getCanvasPos(evt: PointerEvent, canvas: HTMLCanvasElement): StrokePoint {
   const rect = canvas.getBoundingClientRect();
   return {
     x: (evt.clientX - rect.left) * (canvas.width / rect.width),
@@ -8,12 +9,29 @@ function getCanvasPos(evt: PointerEvent, canvas: HTMLCanvasElement) {
   };
 }
 
+function hexToRgb(hex: string) {
+  const h = hex.replace("#", "").trim();
+  if (h.length === 3) {
+    return {
+      r: parseInt(h[0] + h[0], 16),
+      g: parseInt(h[1] + h[1], 16),
+      b: parseInt(h[2] + h[2], 16)
+    };
+  }
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16)
+  };
+}
+
 export function CanvasPad(props: {
   width?: number;
   height?: number;
   strokeWidth?: number;
+  playerId: string;
   onChange?: () => void;
-  onSubmit: (dataUrl: string) => void;
+  onSubmit: (dataUrl: string, strokes: StrokeEvent[]) => void;
   allowedColor?: string;
   initialColor?: string;
   onColorChange?: (color: string) => void;
@@ -31,8 +49,10 @@ export function CanvasPad(props: {
   const [hasDrawn, setHasDrawn] = useState(false);
   const [color, setColor] = useState(props.initialColor ?? "#111111");
   const [size, setSize] = useState(strokeWidth);
+  const strokesRef = useRef<StrokeEvent[]>([]);
+  const currentPointsRef = useRef<StrokePoint[]>([]);
   const strokeMovedRef = useRef(false);
-  const strokeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const strokeStartRef = useRef<StrokePoint | null>(null);
 
   const colors = [
     "#000000", "#555555", "#aaaaaa", "#ffffff",
@@ -78,11 +98,14 @@ export function CanvasPad(props: {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Clear strokes log for a fresh turn
+    strokesRef.current = [];
+
     if (props.initialDataUrl) {
       const img = new Image();
       img.onload = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         setHasDrawn(false);
         strokeMovedRef.current = false;
         strokeStartRef.current = null;
@@ -113,6 +136,7 @@ export function CanvasPad(props: {
       canvas.setPointerCapture(evt.pointerId);
       const p = getCanvasPos(evt, canvas);
       strokeStartRef.current = p;
+      currentPointsRef.current = [p];
 
       // Setup drawing styles for this stroke
       ctx.lineCap = "round";
@@ -127,6 +151,7 @@ export function CanvasPad(props: {
     const onMove = (evt: PointerEvent) => {
       if (!drawing) return;
       const p = getCanvasPos(evt, canvas);
+      currentPointsRef.current.push(p);
       const st = strokeStartRef.current;
       if (st) {
         const dist = Math.hypot(p.x - st.x, p.y - st.y);
@@ -140,13 +165,29 @@ export function CanvasPad(props: {
     };
 
     const onUp = (evt: PointerEvent) => {
-      if (drawing && props.oneStrokeMode && canvasRef.current && strokeMovedRef.current) {
-        // Auto submit after one stroke with real movement
-        const url = canvasRef.current.toDataURL("image/png");
-        props.onSubmit(url);
+      if (drawing) {
+        if (currentPointsRef.current.length > 0) {
+          const newStroke: StrokeEvent = {
+            id: Math.random().toString(36).substr(2, 9),
+            playerId: props.playerId,
+            points: [...currentPointsRef.current],
+            brushSize: size,
+            color: hexToRgb(color),
+            opacity: 1,
+            timestamp: Date.now()
+          };
+          strokesRef.current.push(newStroke);
+        }
+
+        if (props.oneStrokeMode && canvasRef.current && strokeMovedRef.current) {
+          // Auto submit after one stroke with real movement
+          const url = canvasRef.current.toDataURL("image/png");
+          props.onSubmit(url, strokesRef.current);
+        }
       }
       drawing = false;
       strokeStartRef.current = null;
+      currentPointsRef.current = [];
       try {
         canvas.releasePointerCapture(evt.pointerId);
       } catch { }
@@ -177,6 +218,7 @@ export function CanvasPad(props: {
     setHasDrawn(false);
     strokeMovedRef.current = false;
     strokeStartRef.current = null;
+    strokesRef.current = [];
     props.onChange?.();
   };
 
@@ -237,7 +279,7 @@ export function CanvasPad(props: {
 
             <button
               className="btn primary"
-              onClick={() => props.onSubmit(toDataUrl())}
+              onClick={() => props.onSubmit(toDataUrl(), strokesRef.current)}
               disabled={!hasDrawn}
             >
               {props.submitText || "Submit drawing"}

@@ -6,7 +6,7 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import { nanoid } from "nanoid";
-import type { Player } from "./gameTypes.js";
+import type { Player, StrokeEvent } from "./gameTypes.js";
 import {
   advance,
   allCluesSubmitted,
@@ -63,6 +63,22 @@ function getRandomColor(usedColors: string[] = []) {
   const available = COLORS.filter(c => !usedColors.includes(c));
   const palette = available.length > 0 ? available : COLORS;
   return palette[Math.floor(Math.random() * palette.length)]!;
+}
+
+function hexToRgb(hex: string) {
+  const h = hex.replace("#", "").trim();
+  if (h.length === 3) {
+    return {
+      r: parseInt(h[0] + h[0], 16),
+      g: parseInt(h[1] + h[1], 16),
+      b: parseInt(h[2] + h[2], 16)
+    };
+  }
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16)
+  };
 }
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -229,10 +245,10 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
         emitRoom(r.roomCode);
       } else if (r.phase === "draw_shared") {
         if (r.activePlayerId !== bot.id) return;
-        const x1 = Math.random() * 800;
-        const y1 = Math.random() * 500;
-        const x2 = Math.random() * 800;
-        const y2 = Math.random() * 500;
+        const x1 = Math.random() * 900;
+        const y1 = Math.random() * 550;
+        const x2 = Math.random() * 900;
+        const y2 = Math.random() * 550;
 
         const isSvg = r.sharedDrawingUrl?.startsWith('data:image/svg+xml');
         let newSvgUrl = "";
@@ -244,14 +260,22 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
         } else {
           // If it was a PNG or empty, include it as an <image> tag in a new SVG
           const line = `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${bot.color}" stroke-width="8" stroke-linecap="round" />`;
-          const prevImgTag = r.sharedDrawingUrl ? `<image href="${r.sharedDrawingUrl}" width="800" height="500" />` : '';
-          const fullSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500">${prevImgTag}${line}</svg>`;
+          const prevImgTag = r.sharedDrawingUrl ? `<image href="${r.sharedDrawingUrl}" width="900" height="550" />` : '';
+          const fullSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="550">${prevImgTag}${line}</svg>`;
           newSvgUrl = `data:image/svg+xml;utf8,${encodeURIComponent(fullSvg)}`;
         }
 
         r.sharedDrawingUrl = newSvgUrl;
         r.fakeArtistStrokeLog ??= [];
-        r.fakeArtistStrokeLog.push({ playerId: bot.id, snapshotUrl: newSvgUrl });
+        r.fakeArtistStrokeLog.push({
+          id: `bot_stroke_${nanoid(5)}`,
+          playerId: bot.id,
+          points: [{ x: x1, y: y1 }, { x: x2, y: y2 }],
+          brushSize: 8,
+          color: hexToRgb(bot.color),
+          opacity: 1,
+          timestamp: Date.now()
+        });
         r.turnNumber++;
         const artists = getFakeArtistArtistOrder(r);
         if (r.turnNumber > artists.length * 2) {
@@ -433,10 +457,10 @@ io.on("connection", (socket) => {
       socket.join(code);
       socket.data.roomCode = code;
       socket.data.playerId = newPlayer.id;
-      
+
       const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
       console.log(`[Player Join] Room: ${code} | Name: ${newPlayer.name} | ID: ${newPlayer.id} | IP: ${ip}`);
-      
+
       ack?.({ ok: true, roomCode: code, playerId: newPlayer.id });
       emitRoom(code);
     }
@@ -466,7 +490,7 @@ io.on("connection", (socket) => {
 
       // Reset scores on a fresh start from game_over as well
       for (const p of room.playersById.values()) p.score = 0;
-      
+
       console.log(`[Game Start] Room: ${room.roomCode} | Type: ${gameType || room.gameType || "drawful"} | Players: ${listPlayers(room).length}`);
 
       const botCount = room.botCount || 0;
@@ -477,7 +501,7 @@ io.on("connection", (socket) => {
         }
       }
       for (let i = 0; i < botCount; i++) {
-        const botColor = getRandomColor();
+        const botColor = getRandomColor(listPlayers(room).map(p => p.color));
         const newBot: Player = {
           id: `bot_${nanoid(5)}`,
           name: `Bot ${i + 1}`,
@@ -683,13 +707,15 @@ io.on("connection", (socket) => {
     }
   );
 
-  socket.on("fake:draw:submit", ({ roomCode, playerId, imageDataUrl }: { roomCode: string, playerId: string, imageDataUrl: string }, ack?: (resp: any) => void) => {
+  socket.on("fake:draw:submit", ({ roomCode, playerId, imageDataUrl, strokes }: { roomCode: string, playerId: string, imageDataUrl: string, strokes?: StrokeEvent[] }, ack?: (resp: any) => void) => {
     const room = getRoom(roomCode);
     if (!room || room.activePlayerId !== playerId || room.phase !== "draw_shared") return ack?.({ ok: false });
     if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false });
 
     room.fakeArtistStrokeLog ??= [];
-    room.fakeArtistStrokeLog.push({ playerId, snapshotUrl: imageDataUrl });
+    if (strokes && strokes.length > 0) {
+      room.fakeArtistStrokeLog.push(...strokes);
+    }
     room.sharedDrawingUrl = imageDataUrl;
     room.turnNumber++;
 

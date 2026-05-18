@@ -45,6 +45,7 @@ export function AvatarScreen(props: {
           width={400}
           height={400}
           strokeWidth={8}
+          playerId={props.me.id}
           initialColor={props.me.color}
           allowedColor={props.me.color}
           onSubmit={(dataUrl) => props.onAvatarSubmit(dataUrl, props.me.color)}

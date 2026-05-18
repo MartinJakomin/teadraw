@@ -194,13 +194,13 @@ input:focus {
 }
 
 .canvas {
+  display: block;
   width: 100%;
+  max-width: 100%;
   height: auto;
   max-height: 65vh;
-  /* Prevent vertical overflow */
+  aspect-ratio: 900 / 550;
   touch-action: none;
-  display: block;
-  object-fit: contain;
 }
 
 .img {
@@ -987,35 +987,40 @@ input:focus {
   background: rgba(0, 0, 0, 0.2);
 }
 
-/* Stack: base defines size; overlay matches that exact box (no .img border mismatch). */
+/* Stack: base and overlay reside in the exact same 1x1 CSS Grid cell to guarantee pixel-perfect, sub-pixel matching coordinates on any scale. */
 .accuse-drawing-stack {
-  position: relative;
-  display: inline-block;
+  display: inline-grid;
+  grid-template-areas: "stack";
   max-width: 100%;
   margin: 0 auto;
-  line-height: 0;
   border-radius: 12px;
   overflow: hidden;
   background: #fff;
 }
 
 .accuse-drawing-stack .accuse-base-img {
+  grid-area: stack;
   display: block;
+  width: 100%;
   max-width: 100%;
   height: auto;
   max-height: 65vh;
+  aspect-ratio: 900 / 550;
   border: none;
   background: transparent;
 }
 
 .accuse-drawing-stack .accuse-stroke-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
+  grid-area: stack;
+  display: block;
   width: 100%;
-  height: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 65vh;
+  aspect-ratio: 900 / 550;
   pointer-events: none;
-  filter: drop-shadow(0 0 2px var(--accuse-selection, #fff)) drop-shadow(0 0 8px var(--accuse-selection, #fff));
+  /* Tightened, precise, high-contrast glow filters */
+  filter: drop-shadow(0 0 1px var(--accuse-selection, #fff)) drop-shadow(0 0 3px var(--accuse-selection, #fff));
 }
 
 .accuse-target-btn.accuse-target-btn-glow {
@@ -1050,3 +1055,4 @@ input:focus {
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(8px);
 }
+
