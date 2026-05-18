@@ -36,7 +36,7 @@ export function AccuseScreen(props: {
 
   useEffect(() => {
     let cancelled = false;
-    if (!highlightId || !strokeLog?.length || !highlightPlayer) {
+    if (!props.room.fakeArtistHighlight || !highlightId || !strokeLog?.length || !highlightPlayer) {
       setStrokeOverlayUrl(null);
       return;
     }
@@ -51,7 +51,7 @@ export function AccuseScreen(props: {
     return () => {
       cancelled = true;
     };
-  }, [highlightId, highlightPlayer, strokeLog]);
+  }, [highlightId, highlightPlayer, strokeLog, props.room.fakeArtistHighlight]);
 
   return (
     <div className="page accuse-screen">
