@@ -60,14 +60,15 @@ export function VoteScreen(props: {
             return (
               <button
                 key={o.id}
-                className={picked === o.id ? "option picked" : "option"}
+                className={`option vote-option ${picked === o.id ? "picked" : ""} ${isMyClue ? "disabled-clue" : ""}`}
                 disabled={spectating || isDrawer || already || isMyClue}
                 onClick={() => {
                   setPicked(o.id);
                   props.onVote(o.id);
                 }}
               >
-                {o.text}
+                <span className="vote-option-text">{o.text}</span>
+                {isMyClue && <span className="vote-option-subtext">your lie</span>}
               </button>
             );
           })}

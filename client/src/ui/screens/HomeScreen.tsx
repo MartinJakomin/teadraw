@@ -31,7 +31,7 @@ export function HomeScreen(props: {
   }, []);
 
   return (
-    <div className="page center" style={{ background: "var(--bg)" }}>
+    <div className="page center">
       <div style={{ maxWidth: "900px", width: "95%", textAlign: "center" }}>
         <img
           src={logoUrl}

@@ -59,8 +59,9 @@ export function CategoryScreen(props: {
         </div>
 
         <div className="row space" style={{ marginTop: "1rem", flexWrap: "wrap", gap: "12px" }}>
-          <button type="button" className="btn" onClick={randomIdeas}>
-            ✨ Get 3 random ideas
+          <button type="button" className="btn btn-spectator-toggle" onClick={randomIdeas}>
+            <span className="btn-toggle-icon">✨</span>
+            <span>Get 3 random ideas</span>
           </button>
         </div>
 

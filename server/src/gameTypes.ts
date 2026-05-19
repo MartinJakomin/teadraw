@@ -66,6 +66,7 @@ export type RoomStatePublic = {
   lockColors: boolean;
   revealOrder: "random" | "round_robin";
   fakeArtistHighlight: boolean;
+  fakeArtistRandomizeOrder?: boolean;
   botCount: number;
   /** Join order (not sorted by name); used for Fake Artist turn strip and Drawful drawing order */
   playerOrder: PlayerId[];

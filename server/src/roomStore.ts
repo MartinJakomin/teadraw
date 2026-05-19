@@ -59,6 +59,7 @@ type Room = {
   timerSeconds: number;
   useExtraPrompt: boolean;
   fakeArtistHighlight: boolean;
+  fakeArtistRandomizeOrder: boolean;
   lockColors: boolean;
   revealOrder: "random" | "round_robin";
   botCount: number;
@@ -120,6 +121,7 @@ export function createRoom(host: Player): Room {
     lockColors: false,
     revealOrder: "random",
     fakeArtistHighlight: true,
+    fakeArtistRandomizeOrder: false,
     botCount: 0,
     drawings: [],
     drawingIndex: 0,
@@ -176,6 +178,7 @@ export function toPublicState(room: Room): RoomStatePublic {
     lockColors: room.lockColors,
     revealOrder: room.revealOrder,
     fakeArtistHighlight: room.fakeArtistHighlight,
+    fakeArtistRandomizeOrder: room.fakeArtistRandomizeOrder,
     botCount: room.botCount,
     playerOrder: [...room.playerOrder],
     endTime: room.endTime,
@@ -313,7 +316,7 @@ function computeRevealOrder(room: Room, players: PlayerId[], round: number): Pla
   return shuffle(players);
 }
 
-export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean }) {
+export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean }) {
   room.round = 1;
   room.gameType = options.gameType || "drawful";
   room.totalRounds = options.totalRounds !== undefined ? options.totalRounds : room.totalRounds;
@@ -321,12 +324,18 @@ export function startGame(room: Room, options: { gameType?: "drawful" | "fake_ar
   room.useExtraPrompt = options.useExtraPrompt || false;
   room.lockColors = options.lockColors || false;
   room.fakeArtistHighlight = options.fakeArtistHighlight !== undefined ? options.fakeArtistHighlight : true;
+  room.fakeArtistRandomizeOrder = options.fakeArtistRandomizeOrder || false;
   room.revealOrder = options.revealOrder || "random";
   room.usedPrompts.clear();
 
   // Reset scores
   for (const p of room.playersById.values()) {
     p.score = 0;
+  }
+
+  // Shuffle playerOrder once at start of fake artist if setting is active
+  if (room.gameType === "fake_artist" && room.fakeArtistRandomizeOrder) {
+    room.playerOrder = shuffle(room.playerOrder);
   }
 
   const playersWithAvatars = listPlayers(room).filter(p => !!p.avatarUrl);
@@ -348,7 +357,10 @@ export function beginRound(room: Room) {
 }
 
 export function beginFakeArtistRound(room: Room) {
-  const pids = listPlayers(room).filter((p) => !p.isSpectator).map((p) => p.id);
+  const pids = room.playerOrder.filter((id) => {
+    const p = room.playersById.get(id);
+    return p && !p.isSpectator;
+  });
   if (pids.length < 3) return; // Should be handled by UI but good to have
 
   // Pick QM (rotates or random)

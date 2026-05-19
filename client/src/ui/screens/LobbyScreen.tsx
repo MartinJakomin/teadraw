@@ -26,7 +26,22 @@ export function LobbyScreen(props: {
             <h2>Lobby</h2>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", height: "40px" }}>
               <span className="muted" style={{ fontSize: "0.9rem", fontWeight: 600 }}>Room code:</span>
-              <div className="pill" style={{ margin: 0, padding: "8px 16px" }}>{room.roomCode}</div>
+              <div
+                className="pill room-code-pill"
+                style={{ margin: 0, padding: "8px 16px", cursor: "pointer" }}
+                onClick={() => {
+                  navigator.clipboard.writeText(room.roomCode);
+                  const el = document.getElementById("copy-toast");
+                  if (el) {
+                    el.classList.add("show");
+                    setTimeout(() => el.classList.remove("show"), 2000);
+                  }
+                }}
+                title="Click to copy room code"
+              >
+                {room.roomCode}
+              </div>
+              <span id="copy-toast" className="copy-toast">Copied!</span>
             </div>
           </div>
           <button className="btn" onClick={props.onLeave}>
@@ -52,7 +67,7 @@ export function LobbyScreen(props: {
           <div style={{ marginTop: "1rem" }}>
             <button
               type="button"
-              className="btn"
+              className="btn btn-spectator-toggle"
               onClick={() => {
                 setSpecMsg("");
                 props.onToggleSpectator?.((resp) => {
@@ -60,7 +75,17 @@ export function LobbyScreen(props: {
                 });
               }}
             >
-              {props.me.isSpectator ? "🎮 Play" : "👁 Watch as Spectator"}
+              {props.me.isSpectator ? (
+                <>
+                  <span className="btn-toggle-icon">🎮</span>
+                  <span>Play</span>
+                </>
+              ) : (
+                <>
+                  <span className="btn-toggle-icon">👁</span>
+                  <span>Watch as Spectator</span>
+                </>
+              )}
             </button>
             {specMsg ? (
               <div className="error small" style={{ marginTop: "8px" }}>
@@ -106,7 +131,7 @@ export function LobbyScreen(props: {
                     onChange={(e) => props.onUpdateSettings({ totalRounds: Number(e.target.value) })}
                   >
                     {Array.from({ length: 15 }, (_, i) => i + 1).map((n) => (
-                      <option key={n} value={n}>{n} Round{n > 1 ? "s" : ""}</option>
+                      <option key={n} value={n}>{n}{"\u00a0\u00a0\u00a0"}Round{n > 1 ? "s" : ""}</option>
                     ))}
                   </select>
                 </div>
@@ -126,18 +151,6 @@ export function LobbyScreen(props: {
                   </select>
                 </div>
 
-                {room.gameType === "drawful" && (
-                  <div className="setting-row">
-                    <label>Extra Random Prompt:</label>
-                    <input
-                      type="checkbox"
-                      disabled={!props.isHost}
-                      checked={room.useExtraPrompt}
-                      onChange={(e) => props.onUpdateSettings({ useExtraPrompt: e.target.checked })}
-                    />
-                  </div>
-                )}
-
                 <div className="setting-row">
                   <label>Bots (for testing):</label>
                   <select
@@ -152,13 +165,36 @@ export function LobbyScreen(props: {
                 </div>
 
                 {room.gameType === "fake_artist" && (
+                  <>
+                    <div className="setting-row">
+                      <label>Highlight Strokes:</label>
+                      <input
+                        type="checkbox"
+                        disabled={!props.isHost}
+                        checked={room.fakeArtistHighlight}
+                        onChange={(e) => props.onUpdateSettings({ fakeArtistHighlight: e.target.checked })}
+                      />
+                    </div>
+                    <div className="setting-row">
+                      <label>Randomize Player Order:</label>
+                      <input
+                        type="checkbox"
+                        disabled={!props.isHost}
+                        checked={room.fakeArtistRandomizeOrder || false}
+                        onChange={(e) => props.onUpdateSettings({ fakeArtistRandomizeOrder: e.target.checked })}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {room.gameType === "drawful" && (
                   <div className="setting-row">
-                    <label>Highlight Strokes:</label>
+                    <label>Extra Random Prompt:</label>
                     <input
                       type="checkbox"
                       disabled={!props.isHost}
-                      checked={room.fakeArtistHighlight}
-                      onChange={(e) => props.onUpdateSettings({ fakeArtistHighlight: e.target.checked })}
+                      checked={room.useExtraPrompt}
+                      onChange={(e) => props.onUpdateSettings({ useExtraPrompt: e.target.checked })}
                     />
                   </div>
                 )}

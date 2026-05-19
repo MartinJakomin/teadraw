@@ -142,23 +142,35 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
           const status = getStatus(p.id);
           const isDone = status === "Done" || status === "Voted";
           return (
-            <div key={p.id} className={`sidebar-player ${p.id === meId ? "me" : ""} ${!p.connected ? "offline" : ""}`}>
-              <div className="sp-info">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {p.avatarUrl && (
-                    <img
-                      src={p.avatarUrl}
-                      alt="avatar"
-                      style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#fff", border: `2px solid ${p.color}` }}
-                    />
-                  )}
-                  <span className="sp-name" style={{ color: p.color }}>{p.name}</span>
+            <div
+              key={p.id}
+              className={`sidebar-player ${p.id === meId ? "me" : ""} ${!p.connected ? "offline" : ""}`}
+              style={{ ["--player-color" as any]: p.color }}
+            >
+              {p.avatarUrl ? (
+                <img
+                  src={p.avatarUrl}
+                  alt="avatar"
+                  className="sp-avatar"
+                />
+              ) : (
+                <div className="sp-avatar-placeholder" style={{ background: p.color }}>
+                  {p.name.slice(0, 2).toUpperCase()}
                 </div>
+              )}
+
+              <div className="sp-info">
+                <span className="sp-name" style={{ color: p.color }}>
+                  {p.name} {p.id === meId ? <span className="me-badge">(you)</span> : ""}
+                </span>
                 <span className="sp-score">{p.score} pts</span>
               </div>
-              <div className={`sp-status ${isDone ? "done" : ""}`}>
-                {status}
-              </div>
+
+              {status ? (
+                <div className={`sp-status ${isDone ? "done" : ""}`}>
+                  {status}
+                </div>
+              ) : null}
             </div>
           );
         })}

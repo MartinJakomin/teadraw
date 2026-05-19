@@ -52,6 +52,7 @@ export type RoomState = {
   lockColors: boolean;
   revealOrder: "random" | "round_robin";
   fakeArtistHighlight: boolean;
+  fakeArtistRandomizeOrder?: boolean;
   botCount: number;
   endTime?: number;
   /** Join order; used for turn strips */

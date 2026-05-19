@@ -64,9 +64,10 @@ export function PlayerOrderStrip(props: {
             <div
               key={`${id}-${index}`}
               className={`player-order-chip ${active ? "player-order-chip-active" : ""}`}
+              style={{ ["--active-color" as any]: p.color }}
               title={p.name}
             >
-              <span className="player-order-dot" style={{ background: p.color }} />
+              <span className="player-order-dot" style={{ background: p.color, ["--dot-color" as any]: p.color }} />
               <span className="player-order-name" style={{ color: p.color }}>
                 {p.name}
               </span>

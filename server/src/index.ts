@@ -522,7 +522,8 @@ io.on("connection", (socket) => {
         timerSeconds: (room as any).timerSeconds,
         useExtraPrompt: (room as any).useExtraPrompt,
         lockColors: lockColors !== undefined ? lockColors : (room as any).lockColors,
-        fakeArtistHighlight: (room as any).fakeArtistHighlight
+        fakeArtistHighlight: (room as any).fakeArtistHighlight,
+        fakeArtistRandomizeOrder: (room as any).fakeArtistRandomizeOrder
       });
       setupPhaseTimer(room);
       emitPrompts(room.roomCode);
@@ -543,7 +544,7 @@ io.on("connection", (socket) => {
   socket.on(
     "room:updateSettings",
     (
-      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, useExtraPrompt, lockColors, fakeArtistHighlight, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean; botCount?: number },
+      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, useExtraPrompt, lockColors, fakeArtistHighlight, fakeArtistRandomizeOrder, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean; botCount?: number },
       ack?: (resp: any) => void
     ) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
@@ -558,6 +559,7 @@ io.on("connection", (socket) => {
       if (useExtraPrompt !== undefined) room.useExtraPrompt = Boolean(useExtraPrompt);
       if (lockColors !== undefined) room.lockColors = Boolean(lockColors);
       if (fakeArtistHighlight !== undefined) room.fakeArtistHighlight = Boolean(fakeArtistHighlight);
+      if (fakeArtistRandomizeOrder !== undefined) room.fakeArtistRandomizeOrder = Boolean(fakeArtistRandomizeOrder);
       if (botCount !== undefined) room.botCount = Number(botCount);
 
       ack?.({ ok: true });
