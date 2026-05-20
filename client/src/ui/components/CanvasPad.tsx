@@ -53,6 +53,13 @@ export function CanvasPad(props: {
   const currentPointsRef = useRef<StrokePoint[]>([]);
   const strokeMovedRef = useRef(false);
   const strokeStartRef = useRef<StrokePoint | null>(null);
+  const hasSubmittedRef = useRef(false);
+
+  useEffect(() => {
+    if (!props.disabled) {
+      hasSubmittedRef.current = false;
+    }
+  }, [props.disabled]);
 
   const colors = [
     "#000000", "#555555", "#aaaaaa", "#ffffff",
@@ -100,6 +107,7 @@ export function CanvasPad(props: {
 
     // Clear strokes log for a fresh turn
     strokesRef.current = [];
+    hasSubmittedRef.current = false;
 
     if (props.initialDataUrl) {
       const img = new Image();
@@ -130,7 +138,7 @@ export function CanvasPad(props: {
     let drawing = false;
 
     const onDown = (evt: PointerEvent) => {
-      if (props.disabled) return;
+      if (props.disabled || (props.oneStrokeMode && hasSubmittedRef.current)) return;
       drawing = true;
       strokeMovedRef.current = false;
       canvas.setPointerCapture(evt.pointerId);
@@ -149,7 +157,7 @@ export function CanvasPad(props: {
     };
 
     const onMove = (evt: PointerEvent) => {
-      if (!drawing) return;
+      if (!drawing || (props.oneStrokeMode && hasSubmittedRef.current)) return;
       const p = getCanvasPos(evt, canvas);
       currentPointsRef.current.push(p);
       const st = strokeStartRef.current;
@@ -165,8 +173,25 @@ export function CanvasPad(props: {
     };
 
     const onUp = (evt: PointerEvent) => {
+      if (props.oneStrokeMode && hasSubmittedRef.current) {
+        drawing = false;
+        return;
+      }
+
       if (drawing) {
         if (currentPointsRef.current.length > 0) {
+          // If the pointer didn't move, it's a dot. We draw it now on release.
+          if (!strokeMovedRef.current) {
+            const p = currentPointsRef.current[0]!;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            setHasDrawn(true);
+            props.onChange?.();
+          }
+
           const newStroke: StrokeEvent = {
             id: Math.random().toString(36).substr(2, 9),
             playerId: props.playerId,
@@ -177,12 +202,12 @@ export function CanvasPad(props: {
             timestamp: Date.now()
           };
           strokesRef.current.push(newStroke);
-        }
 
-        if (props.oneStrokeMode && canvasRef.current && strokeMovedRef.current) {
-          // Auto submit after one stroke with real movement
-          const url = canvasRef.current.toDataURL("image/png");
-          props.onSubmit(url, strokesRef.current);
+          if (props.oneStrokeMode && canvasRef.current) {
+            hasSubmittedRef.current = true;
+            const url = canvasRef.current.toDataURL("image/png");
+            props.onSubmit(url, strokesRef.current);
+          }
         }
       }
       drawing = false;
@@ -219,6 +244,7 @@ export function CanvasPad(props: {
     strokeMovedRef.current = false;
     strokeStartRef.current = null;
     strokesRef.current = [];
+    hasSubmittedRef.current = false;
     props.onChange?.();
   };
 
@@ -279,8 +305,12 @@ export function CanvasPad(props: {
 
             <button
               className="btn primary"
-              onClick={() => props.onSubmit(toDataUrl(), strokesRef.current)}
-              disabled={!hasDrawn}
+              onClick={() => {
+                if (props.oneStrokeMode && hasSubmittedRef.current) return;
+                if (props.oneStrokeMode) hasSubmittedRef.current = true;
+                props.onSubmit(toDataUrl(), strokesRef.current);
+              }}
+              disabled={!hasDrawn || (props.oneStrokeMode && hasSubmittedRef.current)}
             >
               {props.submitText || "Submit drawing"}
             </button>
