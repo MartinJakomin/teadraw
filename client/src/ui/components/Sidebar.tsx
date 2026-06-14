@@ -4,7 +4,7 @@ import { SERVER_URL } from "../../net/socket";
 
 import logoUrl from "../../../media/logo-transparent.png";
 
-export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => void; onLeave?: () => void }) {
+export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => void; onLeave?: () => void; onKick?: (playerId: string) => void }) {
   const { room, meId } = props;
   const mePlayer = room.players.find((p) => p.id === meId);
   const isHost = room.hostId === meId;
@@ -171,6 +171,20 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
                   {status}
                 </div>
               ) : null}
+
+              {isHost && p.id !== meId && (
+                <button
+                  className="btn danger small"
+                  style={{ marginLeft: "8px", padding: "2px 6px", fontSize: "10px" }}
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to kick ${p.name}?`)) {
+                      props.onKick?.(p.id);
+                    }
+                  }}
+                >
+                  Kick
+                </button>
+              )}
             </div>
           );
         })}

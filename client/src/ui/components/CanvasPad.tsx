@@ -40,6 +40,7 @@ export function CanvasPad(props: {
   submitText?: string;
   oneStrokeMode?: boolean;
   showShades?: boolean;
+  endTime?: number;
 }) {
   const width = props.width ?? 900;
   const height = props.height ?? 550;
@@ -60,6 +61,24 @@ export function CanvasPad(props: {
       hasSubmittedRef.current = false;
     }
   }, [props.disabled]);
+
+  // Auto-submit when timer expires
+  useEffect(() => {
+    if (!props.endTime || hasSubmittedRef.current) return;
+    const check = setInterval(() => {
+      const remaining = props.endTime! - Date.now();
+      if (remaining <= 0 && !hasSubmittedRef.current) {
+        hasSubmittedRef.current = true;
+        clearInterval(check);
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const url = canvas.toDataURL("image/png");
+          props.onSubmit(url, strokesRef.current);
+        }
+      }
+    }, 500);
+    return () => clearInterval(check);
+  }, [props.endTime, props.onSubmit]);
 
   const colors = [
     "#000000", "#555555", "#aaaaaa", "#ffffff",

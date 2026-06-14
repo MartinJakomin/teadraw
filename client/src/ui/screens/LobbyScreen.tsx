@@ -9,6 +9,7 @@ export function LobbyScreen(props: {
   onUpdateSettings: (settings: Partial<RoomState>) => void;
   onToggleSpectator?: (ack?: (resp: { ok?: boolean; error?: string }) => void) => void;
   onLeave: () => void;
+  onKick?: (playerId: string) => void;
 }) {
   const { room } = props;
   const [specMsg, setSpecMsg] = useState("");
@@ -58,7 +59,22 @@ export function LobbyScreen(props: {
                 {p.id === room.hostId ? <span className="tag">host</span> : null}
                 {p.isSpectator ? <span className="tag">spectator</span> : null}
               </div>
-              <div className={p.connected ? "ok" : "muted"}>{p.connected ? "online" : "offline"}</div>
+              <div className={p.connected ? "ok" : "muted"} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>{p.connected ? "online" : "offline"}</span>
+                {props.isHost && p.id !== props.me.id && (
+                  <button
+                    className="btn danger small"
+                    style={{ padding: "2px 6px", fontSize: "10px" }}
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to kick ${p.name}?`)) {
+                        props.onKick?.(p.id);
+                      }
+                    }}
+                  >
+                    Kick
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

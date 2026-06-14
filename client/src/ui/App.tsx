@@ -108,15 +108,22 @@ export function App() {
       setSocketConnected(false);
     };
 
+    const onKicked = () => {
+      resetToHome();
+      setError("You have been kicked from the room.");
+    };
+
     socket.on("room:state", onState);
     socket.on("prompt:you", onPrompt);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    socket.on("room:kicked", onKicked);
     return () => {
       socket.off("room:state", onState);
       socket.off("prompt:you", onPrompt);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      socket.off("room:kicked", onKicked);
     };
   }, [socket, resetToHome]);
 
@@ -149,6 +156,16 @@ export function App() {
     setRoom(null);
     setError("");
     lastPhase.current = null;
+  };
+
+  const kickPlayer = (targetId: string) => {
+    if (roomCode && playerId) {
+      socket.emit("room:kick", { roomCode, playerId, targetId }, (resp: any) => {
+        if (!resp?.ok) {
+          alert(resp?.error ?? "Failed to kick player.");
+        }
+      });
+    }
   };
 
   if (showTitle) {
@@ -209,6 +226,7 @@ export function App() {
             onUpdateSettings={(settings) => socket.emit("room:updateSettings", { roomCode: room.roomCode, playerId, ...settings })}
             onToggleSpectator={(ack) => socket.emit("room:toggleSpectator", { roomCode: room.roomCode, playerId }, ack)}
             onLeave={leave}
+            onKick={kickPlayer}
           />
         );
 
@@ -374,6 +392,7 @@ export function App() {
           meId={me.id}
           onStop={() => socket.emit("room:stop", { roomCode: room.roomCode, playerId: me.id })}
           onLeave={leave}
+          onKick={kickPlayer}
         />
       )}
     </div>

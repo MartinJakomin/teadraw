@@ -49,6 +49,7 @@ export function DrawScreen(props: {
             initialColor={props.me.color}
             allowedColor={props.me.color}
             showShades={true}
+            endTime={props.room.endTime}
             onSubmit={(url) => {
               if (!url) return;
               props.onSubmit(url);

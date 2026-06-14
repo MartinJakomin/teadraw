@@ -22,12 +22,14 @@ export type ClientToServerEvents = {
   "fake:guess:submit": (payload: { roomCode: string; playerId: string; guess: string; }) => void;
   "room:stop": (payload: { roomCode: string; playerId: string; }) => void;
   "room:toggleSpectator": (payload: { roomCode: string; playerId: string }, ack?: (resp: any) => void) => void;
+  "room:kick": (payload: { roomCode: string; playerId: string; targetId: string }, ack?: (resp: any) => void) => void;
 };
 
 
 export type ServerToClientEvents = {
   "room:state": (state: RoomState) => void;
   "prompt:you": (payload: { prompt: string }) => void;
+  "room:kicked": () => void;
 };
 
 let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;

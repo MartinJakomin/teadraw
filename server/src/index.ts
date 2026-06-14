@@ -34,7 +34,8 @@ import {
   resolveFakeArtistRound,
   ensureLobby,
   getFakeArtistArtistOrder,
-  toggleSpectator
+  toggleSpectator,
+  kickPlayer
 } from "./roomStore.js";
 import { pickPrompts } from "./prompts.js";
 
@@ -398,7 +399,7 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
     setupPhaseTimer(room);
     triggerBotActions(room);
     emitRoom(room.roomCode);
-  }, durationSeconds * 1000);
+  }, durationSeconds * 1000 + 1500); // 1.5s grace period so client auto-submit fires first
 }
 
 io.on("connection", (socket) => {
@@ -475,6 +476,56 @@ io.on("connection", (socket) => {
     emitRoom(room.roomCode);
   });
 
+  socket.on(
+    "room:kick",
+    ({ roomCode, playerId, targetId }: { roomCode: string; playerId: string; targetId: string }, ack?: (resp: any) => void) => {
+      const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
+      if (!room) return ack?.({ ok: false, error: "Room not found" });
+      if (room.hostId !== playerId) return ack?.({ ok: false, error: "Only the host can kick players." });
+      if (targetId === playerId) return ack?.({ ok: false, error: "You cannot kick yourself." });
+
+      const targetPlayer = room.playersById.get(targetId);
+      const targetSocketId = targetPlayer?.socketId;
+
+      const res = kickPlayer(room, targetId);
+      if (!res.ok) return ack?.({ ok: false, error: res.error });
+
+      // Notify the kicked player
+      if (targetSocketId) {
+        io.to(targetSocketId).emit("room:kicked");
+        // Remove kicked player from socket room
+        const targetSocket = io.sockets.sockets.get(targetSocketId);
+        if (targetSocket) {
+          targetSocket.leave(room.roomCode);
+          targetSocket.data.roomCode = undefined;
+          targetSocket.data.playerId = undefined;
+        }
+      }
+
+      // After kick, check if phase can advance
+      if (room.phase === "draw" && allDrawingsSubmitted(room)) {
+        beginClueSubmit(room);
+        setupPhaseTimer(room);
+        triggerBotActions(room);
+      } else if (room.phase === "submit" && allCluesSubmitted(room)) {
+        beginVote(room);
+        setupPhaseTimer(room);
+        triggerBotActions(room);
+      } else if (room.phase === "vote" && allVotesCast(room)) {
+        scoreAndReveal(room);
+        setupPhaseTimer(room);
+        triggerBotActions(room);
+      } else if (room.phase === "avatar" && allAvatarsSubmitted(room)) {
+        beginRound(room);
+        setupPhaseTimer(room);
+        emitPrompts(room.roomCode);
+        triggerBotActions(room);
+      }
+
+      ack?.({ ok: true });
+      emitRoom(room.roomCode);
+    }
+  );
 
 
   socket.on(
@@ -572,7 +623,15 @@ io.on("connection", (socket) => {
     ({ roomCode, playerId, imageDataUrl, color }: { roomCode: string; playerId: string; imageDataUrl: string; color: string }, ack?: (resp: any) => void) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
       if (!room) return ack?.({ ok: false, error: "Room not found" });
-      if (room.phase !== "avatar") return ack?.({ ok: false, error: "Not in avatar phase" });
+      if (room.phase !== "avatar") {
+        // Allow late submissions within a 5-second grace period after phase change
+        if (room.phase !== "draw" && room.phase !== "category") return ack?.({ ok: false, error: "Not in avatar phase" });
+        // Accept silently but still save the data, just don't trigger phase changes
+        submitAvatar(room, playerId, String(imageDataUrl ?? ""), color);
+        ack?.({ ok: true });
+        emitRoom(room.roomCode);
+        return;
+      }
       if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot submit an avatar." });
 
       submitAvatar(room, playerId, String(imageDataUrl ?? ""), color);
@@ -593,7 +652,17 @@ io.on("connection", (socket) => {
     ({ roomCode, playerId, imageDataUrl }: { roomCode: string; playerId: string; imageDataUrl: string }, ack?: (resp: any) => void) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
       if (!room) return ack?.({ ok: false, error: "Room not found" });
-      if (room.phase !== "draw") return ack?.({ ok: false, error: "Not in draw phase" });
+      if (room.phase !== "draw") {
+        // Allow late submissions within a grace period after phase change (timer auto-submit)
+        if (room.phase === "submit" || room.phase === "vote" || room.phase === "reveal") {
+          // Phase already advanced, accept silently and save drawing
+          submitDrawing(room, playerId, String(imageDataUrl ?? ""));
+          ack?.({ ok: true });
+          emitRoom(room.roomCode);
+          return;
+        }
+        return ack?.({ ok: false, error: "Not in draw phase" });
+      }
       if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot submit a drawing." });
 
       submitDrawing(room, playerId, String(imageDataUrl ?? ""));

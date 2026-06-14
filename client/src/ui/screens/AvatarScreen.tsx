@@ -48,6 +48,7 @@ export function AvatarScreen(props: {
           playerId={props.me.id}
           initialColor={props.me.color}
           allowedColor={props.me.color}
+          endTime={props.room.endTime}
           onSubmit={(dataUrl) => props.onAvatarSubmit(dataUrl, props.me.color)}
         />
       </div>

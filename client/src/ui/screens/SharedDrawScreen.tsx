@@ -79,6 +79,7 @@ export function SharedDrawScreen(props: {
             initialDataUrl={props.fake.sharedDrawingUrl}
             initialColor={props.me.color}
             allowedColor={props.me.color}
+            endTime={props.room.endTime}
             disabled={!isActive || isQM || spectating}
             oneStrokeMode={true}
             onSubmit={(url, strokes) => {

@@ -279,6 +279,65 @@ export function maybeReassignHost(room: Room) {
   if (next) room.hostId = next.id;
 }
 
+export function kickPlayer(room: Room, kickedId: PlayerId): { ok: boolean; error?: string } {
+  const p = room.playersById.get(kickedId);
+  if (!p) return { ok: false, error: "Player not found." };
+  if (room.hostId === kickedId) return { ok: false, error: "Cannot kick the host." };
+
+  const wasActiveInFakeArtistDraw = room.gameType === "fake_artist" && room.phase === "draw_shared" && room.activePlayerId === kickedId;
+  let nextActiveId: PlayerId | undefined;
+  if (wasActiveInFakeArtistDraw) {
+    const artists = getFakeArtistArtistOrder(room);
+    const idx = artists.indexOf(kickedId);
+    if (idx !== -1 && artists.length > 1) {
+      const nextIdx = (idx + 1) % artists.length;
+      nextActiveId = artists[nextIdx] === kickedId ? undefined : artists[nextIdx];
+    }
+  }
+
+  // Remove player
+  room.playersById.delete(kickedId);
+  room.playerOrder = room.playerOrder.filter((id) => id !== kickedId);
+
+  // Clean up clues/votes
+  room.clueByPlayerId.delete(kickedId);
+  room.voteByVoterId.delete(kickedId);
+  room.votedForId.delete(kickedId);
+
+  // Remove drawing
+  if (room.gameType === "drawful") {
+    room.drawings = room.drawings.filter((d) => d.drawerId !== kickedId);
+    if (room.drawingIndex >= room.drawings.length) {
+      room.drawingIndex = Math.max(0, room.drawings.length - 1);
+    }
+  }
+
+  // Update Fake Artist active player
+  if (wasActiveInFakeArtistDraw) {
+    const newArtists = getFakeArtistArtistOrder(room);
+    if (nextActiveId && newArtists.includes(nextActiveId)) {
+      room.activePlayerId = nextActiveId;
+    } else if (newArtists.length > 0) {
+      room.activePlayerId = newArtists[0];
+    } else {
+      room.activePlayerId = undefined;
+    }
+  }
+
+  // Return to lobby if needed
+  if (room.phase !== "lobby" && room.phase !== "game_over") {
+    const activePlayers = listPlayers(room).filter((pl) => pl.connected && !pl.isSpectator);
+    const minPlayers = room.gameType === "fake_artist" ? 3 : 2;
+    const criticalRoleKicked = room.gameType === "fake_artist" && (room.fakeArtistId === kickedId || room.questionMasterId === kickedId);
+
+    if (activePlayers.length < minPlayers || criticalRoleKicked) {
+      ensureLobby(room);
+    }
+  }
+
+  return { ok: true };
+}
+
 export function ensureLobby(room: Room) {
   room.phase = "lobby";
   room.round = 0;
