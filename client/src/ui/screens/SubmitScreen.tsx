@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import type { RoomState } from "../../types";
 import { PlayerOrderStrip } from "../components/PlayerOrderStrip";
 
@@ -33,6 +33,21 @@ export function SubmitScreen(props: {
       if (err) setError(err);
     });
   };
+
+  const hasSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (!props.room.endTime || hasSubmittedRef.current || already || isDrawer || spectating) return;
+    const check = setInterval(() => {
+      const remaining = props.room.endTime! - Date.now();
+      if (remaining <= 0 && !hasSubmittedRef.current) {
+        hasSubmittedRef.current = true;
+        clearInterval(check);
+        const finalSubmit = text.trim() || "A mystery prompt";
+        props.onSubmit(finalSubmit, () => {});
+      }
+    }, 500);
+    return () => clearInterval(check);
+  }, [props.room.endTime, props.onSubmit, already, isDrawer, spectating, text]);
 
   return (
     <div className="page">

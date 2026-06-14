@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { RoomState } from "../../types";
 
 export function GuessScreen(props: {
@@ -25,6 +25,21 @@ export function GuessScreen(props: {
       </div>
     );
   }
+
+  const hasSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (!props.room.endTime || hasSubmittedRef.current || !isFakeArtist || props.me.isSpectator) return;
+    const check = setInterval(() => {
+      const remaining = props.room.endTime! - Date.now();
+      if (remaining <= 0 && !hasSubmittedRef.current) {
+        hasSubmittedRef.current = true;
+        clearInterval(check);
+        const finalGuess = guess.trim() || "Nothing";
+        props.onSubmit(finalGuess);
+      }
+    }, 500);
+    return () => clearInterval(check);
+  }, [props.room.endTime, props.onSubmit, isFakeArtist, props.me.isSpectator, guess]);
 
   return (
     <div className="page">

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { RoomState } from "../../types";
 import { pickRandomHints, type CategoryWordHint } from "./categoryHints";
 
@@ -34,6 +34,22 @@ export function CategoryScreen(props: {
   const randomIdeas = () => {
     setHints(pickRandomHints(3));
   };
+
+  const hasSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (!props.room.endTime || hasSubmittedRef.current || !isQM) return;
+    const check = setInterval(() => {
+      const remaining = props.room.endTime! - Date.now();
+      if (remaining <= 0 && !hasSubmittedRef.current) {
+        hasSubmittedRef.current = true;
+        clearInterval(check);
+        const finalCat = category.trim() || "Random";
+        const finalWord = word.trim() || "Banana";
+        props.onSubmit(finalCat, finalWord);
+      }
+    }, 500);
+    return () => clearInterval(check);
+  }, [props.room.endTime, props.onSubmit, isQM, category, word]);
 
   return (
     <div className="page">
