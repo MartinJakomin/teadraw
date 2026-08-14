@@ -62,6 +62,9 @@ export type RoomStatePublic = {
   round: number;
   totalRounds: number;
   timerSeconds: number;
+  drawTimerSeconds?: number;
+  submitTimerSeconds?: number;
+  voteTimerSeconds?: number;
   useExtraPrompt: boolean;
   lockColors: boolean;
   revealOrder: "random" | "round_robin";

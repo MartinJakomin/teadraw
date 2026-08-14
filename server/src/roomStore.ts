@@ -57,6 +57,9 @@ type Room = {
   round: number;
   totalRounds: number;
   timerSeconds: number;
+  drawTimerSeconds?: number;
+  submitTimerSeconds?: number;
+  voteTimerSeconds?: number;
   useExtraPrompt: boolean;
   fakeArtistHighlight: boolean;
   fakeArtistRandomizeOrder: boolean;
@@ -174,6 +177,9 @@ export function toPublicState(room: Room): RoomStatePublic {
     round: room.round,
     totalRounds: room.totalRounds,
     timerSeconds: room.timerSeconds,
+    drawTimerSeconds: room.drawTimerSeconds,
+    submitTimerSeconds: room.submitTimerSeconds,
+    voteTimerSeconds: room.voteTimerSeconds,
     useExtraPrompt: room.useExtraPrompt,
     lockColors: room.lockColors,
     revealOrder: room.revealOrder,
@@ -375,11 +381,14 @@ function computeRevealOrder(room: Room, players: PlayerId[], round: number): Pla
   return shuffle(players);
 }
 
-export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean }) {
+export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean }) {
   room.round = 1;
   room.gameType = options.gameType || "drawful";
   room.totalRounds = options.totalRounds !== undefined ? options.totalRounds : room.totalRounds;
-  room.timerSeconds = options.timerSeconds || 0;
+  room.timerSeconds = options.timerSeconds !== undefined ? options.timerSeconds : room.timerSeconds;
+  room.drawTimerSeconds = options.drawTimerSeconds !== undefined ? options.drawTimerSeconds : room.drawTimerSeconds;
+  room.submitTimerSeconds = options.submitTimerSeconds !== undefined ? options.submitTimerSeconds : room.submitTimerSeconds;
+  room.voteTimerSeconds = options.voteTimerSeconds !== undefined ? options.voteTimerSeconds : room.voteTimerSeconds;
   room.useExtraPrompt = options.useExtraPrompt || false;
   room.lockColors = options.lockColors || false;
   room.fakeArtistHighlight = options.fakeArtistHighlight !== undefined ? options.fakeArtistHighlight : true;

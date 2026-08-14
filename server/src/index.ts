@@ -331,16 +331,18 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
 
 function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
   clearRoomTimer(room);
-  if (!room.timerSeconds) return;
 
   let durationSeconds = 0;
-  if (room.phase === "draw" || room.phase === "avatar") durationSeconds = room.timerSeconds;
-  else if (room.phase === "submit" || room.phase === "vote") durationSeconds = Math.max(15, Math.floor(room.timerSeconds / 2));
+  if (room.phase === "draw" || room.phase === "avatar") durationSeconds = room.drawTimerSeconds ?? room.timerSeconds;
+  else if (room.phase === "submit") durationSeconds = room.submitTimerSeconds ?? room.timerSeconds;
+  else if (room.phase === "vote") durationSeconds = room.voteTimerSeconds ?? room.timerSeconds;
   else if (room.phase === "category") durationSeconds = 30;
-  else if (room.phase === "draw_shared") durationSeconds = room.timerSeconds;
-  else if (room.phase === "accuse") durationSeconds = Math.max(20, room.timerSeconds);
+  else if (room.phase === "draw_shared") durationSeconds = room.drawTimerSeconds ?? room.timerSeconds;
+  else if (room.phase === "accuse") durationSeconds = Math.max(20, room.drawTimerSeconds ?? room.timerSeconds);
   else if (room.phase === "guess") durationSeconds = 30;
   else return;
+
+  if (!durationSeconds || durationSeconds <= 0) return;
 
   room.endTime = Date.now() + durationSeconds * 1000;
   room.timeoutId = setTimeout(() => {
@@ -571,6 +573,9 @@ io.on("connection", (socket) => {
         totalRounds,
         revealOrder,
         timerSeconds: (room as any).timerSeconds,
+        drawTimerSeconds: (room as any).drawTimerSeconds,
+        submitTimerSeconds: (room as any).submitTimerSeconds,
+        voteTimerSeconds: (room as any).voteTimerSeconds,
         useExtraPrompt: (room as any).useExtraPrompt,
         lockColors: lockColors !== undefined ? lockColors : (room as any).lockColors,
         fakeArtistHighlight: (room as any).fakeArtistHighlight,
@@ -595,7 +600,7 @@ io.on("connection", (socket) => {
   socket.on(
     "room:updateSettings",
     (
-      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, useExtraPrompt, lockColors, fakeArtistHighlight, fakeArtistRandomizeOrder, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean; botCount?: number },
+      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, drawTimerSeconds, submitTimerSeconds, voteTimerSeconds, useExtraPrompt, lockColors, fakeArtistHighlight, fakeArtistRandomizeOrder, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; useExtraPrompt?: boolean; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean; botCount?: number },
       ack?: (resp: any) => void
     ) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
@@ -606,7 +611,16 @@ io.on("connection", (socket) => {
       if (gameType !== undefined) room.gameType = gameType;
       if (totalRounds !== undefined) room.totalRounds = Math.max(1, Math.min(15, Number(totalRounds)));
       if (revealOrder !== undefined) room.revealOrder = revealOrder;
-      if (timerSeconds !== undefined) room.timerSeconds = Number(timerSeconds);
+      if (timerSeconds !== undefined) {
+        room.timerSeconds = Number(timerSeconds);
+        // Sync stage timers if master timer is changed
+        room.drawTimerSeconds = Number(timerSeconds);
+        room.submitTimerSeconds = Number(timerSeconds);
+        room.voteTimerSeconds = Number(timerSeconds);
+      }
+      if (drawTimerSeconds !== undefined) room.drawTimerSeconds = Number(drawTimerSeconds);
+      if (submitTimerSeconds !== undefined) room.submitTimerSeconds = Number(submitTimerSeconds);
+      if (voteTimerSeconds !== undefined) room.voteTimerSeconds = Number(voteTimerSeconds);
       if (useExtraPrompt !== undefined) room.useExtraPrompt = Boolean(useExtraPrompt);
       if (lockColors !== undefined) room.lockColors = Boolean(lockColors);
       if (fakeArtistHighlight !== undefined) room.fakeArtistHighlight = Boolean(fakeArtistHighlight);
@@ -687,8 +701,16 @@ io.on("connection", (socket) => {
 
       const cur = room.drawings[room.drawingIndex];
       const submittedText = String(text ?? "").trim();
-      if (cur && submittedText.toLowerCase() === cur.prompt.toLowerCase()) {
+      const normText = submittedText.toLowerCase();
+
+      if (cur && normText === cur.prompt.toLowerCase()) {
         return ack?.({ ok: false, error: "That's too close to the real prompt! Try something else." });
+      }
+
+      for (const [authorId, existingClue] of room.clueByPlayerId.entries()) {
+        if (authorId !== playerId && existingClue.trim().toLowerCase() === normText) {
+          return ack?.({ ok: false, error: "Someone else already submitted that exact fake prompt! Try something else." });
+        }
       }
 
       submitClue(room, playerId, submittedText);

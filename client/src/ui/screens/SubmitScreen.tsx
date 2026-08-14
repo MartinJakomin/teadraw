@@ -42,7 +42,7 @@ export function SubmitScreen(props: {
       if (remaining <= 0 && !hasSubmittedRef.current) {
         hasSubmittedRef.current = true;
         clearInterval(check);
-        const finalSubmit = text.trim() || "A mystery prompt";
+        const finalSubmit = text.trim() || `${props.me.name}'s mystery prompt`;
         props.onSubmit(finalSubmit, () => {});
       }
     }, 500);

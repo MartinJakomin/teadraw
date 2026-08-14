@@ -152,20 +152,72 @@ export function LobbyScreen(props: {
                   </select>
                 </div>
 
-                <div className="setting-row">
-                  <label>Timer (Seconds):</label>
-                  <select
-                    disabled={!props.isHost}
-                    value={room.timerSeconds}
-                    onChange={(e) => props.onUpdateSettings({ timerSeconds: Number(e.target.value) })}
-                  >
-                    <option value={0}>No Timer</option>
-                    <option value={30}>30s</option>
-                    <option value={45}>45s</option>
-                    <option value={60}>60s</option>
-                    <option value={90}>90s</option>
-                  </select>
-                </div>
+                {room.gameType === "drawful" ? (
+                  <>
+                    <div className="setting-row">
+                      <label>Drawing Time:</label>
+                      <select
+                        disabled={!props.isHost}
+                        value={room.drawTimerSeconds ?? room.timerSeconds}
+                        onChange={(e) => props.onUpdateSettings({ drawTimerSeconds: Number(e.target.value) })}
+                      >
+                        <option value={0}>No Timer</option>
+                        <option value={30}>30s</option>
+                        <option value={45}>45s</option>
+                        <option value={60}>60s</option>
+                        <option value={90}>90s</option>
+                        <option value={120}>120s</option>
+                      </select>
+                    </div>
+
+                    <div className="setting-row">
+                      <label>Prompting Time:</label>
+                      <select
+                        disabled={!props.isHost}
+                        value={room.submitTimerSeconds ?? room.timerSeconds}
+                        onChange={(e) => props.onUpdateSettings({ submitTimerSeconds: Number(e.target.value) })}
+                      >
+                        <option value={0}>No Timer</option>
+                        <option value={15}>15s</option>
+                        <option value={30}>30s</option>
+                        <option value={45}>45s</option>
+                        <option value={60}>60s</option>
+                        <option value={90}>90s</option>
+                      </select>
+                    </div>
+
+                    <div className="setting-row">
+                      <label>Voting Time:</label>
+                      <select
+                        disabled={!props.isHost}
+                        value={room.voteTimerSeconds ?? room.timerSeconds}
+                        onChange={(e) => props.onUpdateSettings({ voteTimerSeconds: Number(e.target.value) })}
+                      >
+                        <option value={0}>No Timer</option>
+                        <option value={15}>15s</option>
+                        <option value={30}>30s</option>
+                        <option value={45}>45s</option>
+                        <option value={60}>60s</option>
+                        <option value={90}>90s</option>
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  <div className="setting-row">
+                    <label>Timer (Seconds):</label>
+                    <select
+                      disabled={!props.isHost}
+                      value={room.timerSeconds}
+                      onChange={(e) => props.onUpdateSettings({ timerSeconds: Number(e.target.value) })}
+                    >
+                      <option value={0}>No Timer</option>
+                      <option value={30}>30s</option>
+                      <option value={45}>45s</option>
+                      <option value={60}>60s</option>
+                      <option value={90}>90s</option>
+                    </select>
+                  </div>
+                )}
 
                 <div className="setting-row">
                   <label>Bots (for testing):</label>
