@@ -25,8 +25,21 @@ export function RevealScreen(props: {
   const drawerAvatar = drawer?.avatarUrl;
   const drawerColor = drawer?.color ?? "#000";
 
-  const isChaos = Boolean(props.room.finalChaosRound && props.room.round === props.room.totalRounds);
+  const isChaos = Boolean(props.room.finalChaosRound && props.room.round > props.room.totalRounds);
   const sorted = [...props.room.players].sort((a, b) => b.score - a.score);
+
+  const isLastDrawing = props.reveal.drawingIndex >= props.reveal.totalDrawings - 1;
+  const maxRounds = props.room.finalChaosRound ? props.room.totalRounds + 1 : props.room.totalRounds;
+  const isLastRound = props.room.round >= maxRounds;
+  const isEnteringChaosNext = Boolean(props.room.finalChaosRound && props.room.round === props.room.totalRounds && isLastDrawing);
+
+  const nextButtonLabel = isLastDrawing
+    ? (isLastRound
+        ? "Finish Game 🏆"
+        : (isEnteringChaosNext
+            ? "Start Final Chaos Round 🔥"
+            : "Next Round ➡️"))
+    : "Next drawing";
 
   return (
     <div className="page">
@@ -53,7 +66,7 @@ export function RevealScreen(props: {
           </div>
           {props.isHost && !props.me.isSpectator ? (
             <button className="btn primary" onClick={props.onNext}>
-              {props.reveal.drawingIndex >= props.reveal.totalDrawings - 1 && props.room.round >= props.room.totalRounds ? "Finish Game" : (props.reveal.drawingIndex >= props.reveal.totalDrawings - 1 ? "Next Round" : "Next drawing")}
+              {nextButtonLabel}
             </button>
           ) : (
             <div className="muted">Waiting for host…</div>

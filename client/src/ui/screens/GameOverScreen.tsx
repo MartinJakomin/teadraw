@@ -104,6 +104,35 @@ export function GameOverScreen(props: {
           </>
         )}
 
+        {props.room.accolades && props.room.accolades.length > 0 && (
+          <div style={{ marginTop: "2.5rem" }}>
+            <h3 style={{ marginBottom: "1rem" }}>🏅 Accolades</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
+              {props.room.accolades.map((a, i) => (
+                <div
+                  key={i}
+                  className="scale-in"
+                  style={{
+                    padding: "16px",
+                    borderRadius: "18px",
+                    background: "rgba(255, 255, 255, 0.04)",
+                    border: `1px solid ${a.playerColor}44`,
+                    boxShadow: `0 4px 20px ${a.playerColor}22`,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px"
+                  }}
+                >
+                  <div style={{ fontSize: "2rem" }}>{a.icon}</div>
+                  <div style={{ fontWeight: 900, color: "#fff", fontSize: "1rem", letterSpacing: "0.02em" }}>{a.title}</div>
+                  <div style={{ fontWeight: 700, color: a.playerColor, fontSize: "0.95rem" }}>{a.playerName}</div>
+                  <div className="muted small">{a.description}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {props.room.gallery && props.room.gallery.length > 0 && (
           <div style={{ marginTop: "2.5rem" }}>
             <div className="row space" style={{ marginBottom: "1rem" }}>
@@ -162,37 +191,6 @@ export function GameOverScreen(props: {
                       💾 Save
                     </button>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="divider" />
-
-        {props.room.accolades && props.room.accolades.length > 0 && (
-          <div style={{ marginTop: "2rem" }}>
-            <h3 style={{ marginBottom: "1rem" }}>🏅 Accolades</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
-              {props.room.accolades.map((a, i) => (
-                <div
-                  key={i}
-                  className="scale-in"
-                  style={{
-                    padding: "16px",
-                    borderRadius: "18px",
-                    background: "rgba(255, 255, 255, 0.04)",
-                    border: `1px solid ${a.playerColor}44`,
-                    boxShadow: `0 4px 20px ${a.playerColor}22`,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px"
-                  }}
-                >
-                  <div style={{ fontSize: "2rem" }}>{a.icon}</div>
-                  <div style={{ fontWeight: 900, color: "#fff", fontSize: "1rem", letterSpacing: "0.02em" }}>{a.title}</div>
-                  <div style={{ fontWeight: 700, color: a.playerColor, fontSize: "0.95rem" }}>{a.playerName}</div>
-                  <div className="muted small">{a.description}</div>
                 </div>
               ))}
             </div>

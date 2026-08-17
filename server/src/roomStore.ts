@@ -633,9 +633,9 @@ export function startRound(room: Room) {
   const playerIdsForRound =
     players.length > 0 ? players : room.playerOrder.filter((id) => room.playersById.has(id));
   const prompts = pickPrompts(playerIdsForRound.length, room.usedPrompts);
-  const order = computeRevealOrder(room, playerIdsForRound, room.round);
 
-  const isChaosRound = Boolean(room.finalChaosRound && room.round === room.totalRounds);
+  const isChaosRound = Boolean(room.finalChaosRound && room.round > room.totalRounds);
+  const order = isChaosRound ? shuffle(playerIdsForRound) : computeRevealOrder(room, playerIdsForRound, room.round);
   const sharedChaosPrompt = prompts[0]!;
 
   const promptByPlayer = new Map<PlayerId, string>();
@@ -679,7 +679,7 @@ export function allDrawingsSubmitted(room: Room): boolean {
 }
 
 export function advanceAfterDraw(room: Room) {
-  const isChaos = Boolean(room.finalChaosRound && room.round === room.totalRounds);
+  const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
   if (isChaos) {
     beginVote(room);
   } else {
@@ -720,7 +720,7 @@ export function beginVote(room: Room) {
   const cur = room.drawings[room.drawingIndex];
   if (!cur?.imageDataUrl) return;
 
-  const isChaos = Boolean(room.finalChaosRound && room.round === room.totalRounds);
+  const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
   const options: Option[] = [];
 
   if (isChaos) {
@@ -777,7 +777,7 @@ export function scoreAndReveal(room: Room) {
   const realOption = room.options.find((o) => o.authorId === null);
   if (!realOption) return;
 
-  const isChaos = Boolean(room.finalChaosRound && room.round === room.totalRounds);
+  const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
   const voters = listPlayers(room).filter((p) => p.id !== drawerId && !p.isSpectator);
   const correctVoters = voters.filter((v) => room.voteByVoterId.get(v.id) === realOption.id);
 
@@ -921,14 +921,15 @@ export function advance(room: Room) {
 
   room.drawingIndex += 1;
   if (room.drawingIndex >= room.drawings.length) {
-    if (room.round < room.totalRounds) {
+    const maxRounds = room.gameType === "drawful" && room.finalChaosRound ? room.totalRounds + 1 : room.totalRounds;
+    if (room.round < maxRounds) {
       room.round += 1;
       startRound(room);
     } else {
       room.phase = "game_over";
     }
   } else {
-    const isChaos = Boolean(room.finalChaosRound && room.round === room.totalRounds);
+    const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
     if (isChaos) {
       beginVote(room);
     } else {

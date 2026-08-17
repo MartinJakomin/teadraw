@@ -67,8 +67,14 @@ export function DrawScreen(props: {
     return () => clearInterval(interval);
   }, [effectiveEndTime]);
 
-  const isChaos = Boolean(props.room.finalChaosRound && props.room.round === props.room.totalRounds);
+  const isChaos = Boolean(props.room.finalChaosRound && props.room.round > props.room.totalRounds);
   const [showChaosSplash, setShowChaosSplash] = useState(isChaos);
+
+  useEffect(() => {
+    if (isChaos) {
+      setShowChaosSplash(true);
+    }
+  }, [isChaos, props.room.round]);
 
   return (
     <div className="page">
@@ -84,6 +90,13 @@ export function DrawScreen(props: {
                 <div>
                   <b>Same Secret Prompt</b>
                   <p>Every single player is drawing the exact same prompt right now!</p>
+                </div>
+              </div>
+              <div className="chaos-rule-item">
+                <span className="chaos-rule-icon">🕶️</span>
+                <div>
+                  <b>Unified Black Ink</b>
+                  <p>Everyone is given the exact same ink palette to conceal your identity!</p>
                 </div>
               </div>
               <div className="chaos-rule-item">
@@ -114,7 +127,7 @@ export function DrawScreen(props: {
             <h2 style={{ margin: 0 }}>{isChaos ? "🔥 Final Chaos Round: Draw" : "Draw"}</h2>
             <div className="muted" style={{ marginTop: "6px" }}>
               {isChaos
-                ? "🔥 Everyone has the EXACT same secret prompt! Draw your best rendition!"
+                ? "🔥 Everyone has the EXACT same secret prompt and black ink! Draw your best rendition!"
                 : "Everyone draws their own prompt at the same time."}
             </div>
           </div>
@@ -126,33 +139,7 @@ export function DrawScreen(props: {
           )}
         </div>
 
-        {isChaos && !spectating && !alreadySubmitted && (
-          <div
-            className="scale-in"
-            style={{
-              margin: "1rem 0",
-              padding: "14px 20px",
-              borderRadius: "18px",
-              background: "linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(249, 115, 22, 0.25))",
-              border: "1px solid rgba(249, 115, 22, 0.5)",
-              display: "flex",
-              alignItems: "center",
-              gap: "14px",
-              boxShadow: "0 6px 20px rgba(239, 68, 68, 0.2)"
-            }}
-          >
-            <span style={{ fontSize: "2.2rem" }}>🔥</span>
-            <div>
-              <div style={{ fontWeight: 900, color: "#fff", fontSize: "1.15rem", letterSpacing: "0.02em" }}>
-                Identical Secret Prompt Active!
-              </div>
-              <div style={{ fontSize: "0.88rem", color: "rgba(255, 255, 255, 0.85)", marginTop: "2px" }}>
-                All players are drawing: <b style={{ color: "#fef08a" }}>"{props.prompt}"</b>. Can players recognize your style later?
-              </div>
-            </div>
-          </div>
-        )}
-
+        {/* Trick Announcement Banner on Canvas */}
         {trickInfo && !spectating && !alreadySubmitted && (
           <div
             className="scale-in"
@@ -181,7 +168,7 @@ export function DrawScreen(props: {
               </div>
             </div>
             {props.trick === "half_time" && remainingSeconds !== null && (
-              <div className={`trick-timer-pill ${remainingSeconds <= 5 ? "urgent" : ""}`} style={{ flexShrink: 0 }}>
+              <div className="trick-timer-pill" style={{ flexShrink: 0 }}>
                 <span>⏳</span>
                 <span>{remainingSeconds}s</span>
               </div>
@@ -209,8 +196,8 @@ export function DrawScreen(props: {
         ) : (
           <CanvasPad
             playerId={props.me.id}
-            initialColor={props.me.color}
-            allowedColor={props.me.color}
+            initialColor={isChaos ? "#000000" : props.me.color}
+            allowedColor={isChaos ? "#000000" : props.me.color}
             showShades={true}
             endTime={effectiveEndTime}
             trick={props.trick}

@@ -38,6 +38,8 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
     return () => clearInterval(interval);
   }, [room.endTime]);
 
+  const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
+
   const getStatus = (pId: string) => {
     const pl = room.players.find((p) => p.id === pId);
     if (pl?.isSpectator && room.phase !== "lobby") return "Watching";
@@ -46,10 +48,16 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
       return room.drawing?.submittedBy.includes(pId) ? "Done" : "Drawing...";
     }
     if (room.phase === "submit") {
+      if (isChaos) {
+        return room.submit?.submittedBy.includes(pId) ? "Done" : "Typing...";
+      }
       if (room.submit?.drawerId === pId) return "Drawing";
       return room.submit?.submittedBy.includes(pId) ? "Done" : "Typing...";
     }
     if (room.phase === "vote") {
+      if (isChaos) {
+        return "";
+      }
       if (room.vote?.drawerId === pId) return "Drawing";
       return room.vote?.votedBy.includes(pId) ? "Voted" : "Thinking...";
     }
@@ -127,7 +135,11 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
         <div>
           <h3 style={{ marginBottom: "2px" }}>Game Status</h3>
           {room.phase !== "lobby" && room.phase !== "game_over" && (
-            <div className="muted small">Round {room.round} / {room.totalRounds}</div>
+            room.round > room.totalRounds ? (
+              <div className="muted small" style={{ color: "#f59e0b", fontWeight: 700 }}>🔥 Final Chaos Round</div>
+            ) : (
+              <div className="muted small">Round {room.round} / {room.totalRounds}</div>
+            )
           )}
         </div>
         {timeLeft !== null && (

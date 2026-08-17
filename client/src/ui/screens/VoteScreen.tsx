@@ -12,7 +12,7 @@ export function VoteScreen(props: {
   vote: NonNullable<RoomState["vote"]>;
   onVote: (optionId: string, likedOptionIds?: string[]) => void;
 }) {
-  const isChaos = Boolean(props.room.finalChaosRound && props.room.round === props.room.totalRounds);
+  const isChaos = Boolean(props.room.finalChaosRound && props.room.round > props.room.totalRounds);
   const isDrawer = props.vote.drawerId === props.me.id;
   const already = useMemo(() => props.vote.votedBy.includes(props.me.id), [props.me.id, props.vote.votedBy]);
   const [picked, setPicked] = useState<string>("");

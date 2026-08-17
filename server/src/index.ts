@@ -40,31 +40,50 @@ import {
 } from "./roomStore.js";
 import { pickPrompts } from "./prompts.js";
 
-const COLORS = [
-  "#ff0000", // Red
-  "#0000ff", // Blue
-  "#008000", // Green
-  "#ff00ff", // Magenta
-  "#ff8c00", // Dark Orange
-  "#8a2be2", // Blue Violet
-  "#00ced1", // Dark Turquoise
-  "#dc143c", // Crimson
-  "#ffd700", // Gold
-  "#000080", // Navy
-  "#8b4513", // Saddle Brown
-  "#2e8b57", // Sea Green
-  "#9932cc", // Dark Orchid
-  "#ff1493", // Deep Pink
-  "#00fa9a", // Medium Spring Green
-  "#1e90ff", // Dodger Blue
-  "#b22222", // Firebrick
-  "#4b0082"  // Indigo
+// Curated, high-contrast palette arranged so successive joins have maximally separated, vibrant hues
+const DISTINCT_COLORS = [
+  "#ef4444", // 01. Vivid Crimson Red
+  "#3b82f6", // 02. Electric Royal Blue
+  "#10b981", // 03. Emerald Green
+  "#f97316", // 04. Bright Tangerine Orange
+  "#8b5cf6", // 05. Vibrant Violet
+  "#ec4899", // 06. Hot Pink
+  "#06b6d4", // 07. Electric Cyan
+  "#eab308", // 08. Radiant Golden Amber
+  "#14b8a6", // 09. Teal Mint
+  "#a855f7", // 10. Neon Purple
+  "#84cc16", // 11. Electric Lime
+  "#f43f5e", // 12. Deep Rose
+  "#0ea5e9", // 13. Sky Blue
+  "#d946ef", // 14. Neon Fuchsia
+  "#6366f1", // 15. Indigo Blue
+  "#e11d48", // 16. Ruby
+  "#22c55e", // 17. Vibrant Green
+  "#f59e0b", // 18. Warm Amber
+  "#0284c7", // 19. Cerulean
+  "#7c3aed"  // 20. Deep Violet
 ];
 
+function hslToHex(h: number, s: number, l: number): string {
+  l /= 100;
+  const a = (s * Math.min(l, 1 - l)) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
 function getRandomColor(usedColors: string[] = []) {
-  const available = COLORS.filter(c => !usedColors.includes(c));
-  const palette = available.length > 0 ? available : COLORS;
-  return palette[Math.floor(Math.random() * palette.length)]!;
+  const available = DISTINCT_COLORS.filter(c => !usedColors.includes(c));
+  if (available.length > 0) {
+    return available[0]!;
+  }
+  const count = usedColors.length;
+  const goldenRatio = 0.618033988749895;
+  const hue = Math.round(((count * goldenRatio) % 1) * 360);
+  return hslToHex(hue, 85, 55);
 }
 
 function hexToRgb(hex: string) {
