@@ -1,5 +1,6 @@
 import React from "react";
 import type { RoomState, PlayerId } from "../../types";
+import { downloadImageDataUrl } from "../downloadImage";
 
 export function RevealFakeScreen(props: {
   room: RoomState;
@@ -57,6 +58,19 @@ export function RevealFakeScreen(props: {
            <div className="reveal-main">
               <div style={{ marginBottom: "2rem", textAlign: "center" }}>
                  <img className="img reveal-img" src={props.fake.sharedDrawingUrl} alt="shared drawing" />
+                 {props.fake.sharedDrawingUrl && (
+                   <div style={{ marginTop: "12px" }}>
+                     <button
+                       className="btn"
+                       onClick={() => {
+                         const filename = `teadraw-fakeartist-round${props.room.round}-${(props.fake.word || "drawing").replace(/\s+/g, '_')}.png`;
+                         downloadImageDataUrl(props.fake.sharedDrawingUrl!, filename);
+                       }}
+                     >
+                       💾 Save Drawing
+                     </button>
+                   </div>
+                 )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>

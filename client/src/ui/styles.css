@@ -1739,7 +1739,220 @@ select option {
   pointer-events: none;
 }
 
+/* Floating Reaction Animations */
+@keyframes floatUpReaction {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-40px) scale(1.2);
+  }
+  85% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-400px) scale(0.8);
+  }
+}
+
+.reaction-btn:hover {
+  transform: scale(1.35) !important;
+}
+
 .copy-toast.show {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Timer Badges */
+.timer {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.02em;
+}
+
+.timer.urgent {
+  background: rgba(239, 68, 68, 0.35);
+  border-color: rgba(239, 68, 68, 0.8);
+  color: #fca5a5;
+  animation: timerPulse 0.8s infinite alternate ease-in-out;
+}
+
+.trick-timer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 1.05rem;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.trick-timer-pill.urgent {
+  background: rgba(239, 68, 68, 0.45);
+  border-color: #ef4444;
+  color: #fee2e2;
+  animation: timerPulse 0.7s infinite alternate ease-in-out;
+}
+
+@keyframes timerPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  100% {
+    transform: scale(1.06);
+    box-shadow: 0 0 14px 4px rgba(239, 68, 68, 0.6);
+  }
+}
+
+/* Chaos Splash Screen & Cards */
+.chaos-splash-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 30, 0.88);
+  backdrop-filter: blur(16px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.chaos-splash-card {
+  max-width: 520px;
+  width: 100%;
+  background: linear-gradient(145deg, rgba(30, 15, 40, 0.95), rgba(15, 23, 42, 0.98));
+  border: 2px solid rgba(249, 115, 22, 0.6);
+  border-radius: 28px;
+  padding: 36px 28px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(249, 115, 22, 0.35), 0 0 60px rgba(239, 68, 68, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.chaos-fire-icon {
+  font-size: 3.5rem;
+  animation: flamePulse 1.2s infinite alternate ease-in-out;
+  filter: drop-shadow(0 0 15px rgba(249, 115, 22, 0.8));
+}
+
+@keyframes flamePulse {
+  0% { transform: scale(0.95) rotate(-4deg); }
+  100% { transform: scale(1.1) rotate(4deg); }
+}
+
+.chaos-splash-title {
+  margin: 0;
+  font-size: 2.2rem;
+  font-weight: 900;
+  background: linear-gradient(90deg, #f97316, #ef4444, #fbbf24);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chaos-splash-tag {
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #fed7aa;
+  background: rgba(249, 115, 22, 0.2);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  padding: 6px 16px;
+  border-radius: 999px;
+  margin-top: -6px;
+}
+
+.chaos-splash-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+  margin: 12px 0 6px 0;
+  width: 100%;
+}
+
+.chaos-rule-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 12px 16px;
+  border-radius: 16px;
+}
+
+.chaos-rule-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.chaos-rule-item b {
+  color: #fff;
+  font-size: 0.95rem;
+  display: block;
+}
+
+.chaos-rule-item p {
+  margin: 2px 0 0 0;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.chaos-start-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #f97316, #ef4444) !important;
+  border: none !important;
+  box-shadow: 0 4px 20px rgba(249, 115, 22, 0.4) !important;
+  cursor: pointer;
+}
+
+/* Chaos Player Voting Cards */
+.chaos-player-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  cursor: pointer;
+}
+
+.chaos-player-card:hover:not(.disabled-clue) {
+  transform: translateY(-2px) scale(1.02);
+  border-color: rgba(249, 115, 22, 0.7);
+  background: rgba(249, 115, 22, 0.12);
+  box-shadow: 0 6px 20px rgba(249, 115, 22, 0.25);
+}
+
+.chaos-player-card.picked {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.25), rgba(239, 68, 68, 0.25));
+  border-color: #f97316;
+  box-shadow: 0 0 0 2px #f97316, 0 6px 20px rgba(249, 115, 22, 0.4);
 }

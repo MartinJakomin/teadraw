@@ -26,10 +26,13 @@ export type Player = {
   isSpectator?: boolean;
 };
 
+export type TrickType = "blind" | "one_stroke" | "large_brush" | "tiny_brush" | "half_time" | "upside_down" | "wobble" | "mirror" | "ink_limit";
+
 export type Drawing = {
   drawerId: PlayerId;
   prompt: string;
   imageDataUrl?: string;
+  trick?: TrickType;
 };
 
 export type Option = {
@@ -49,9 +52,26 @@ export type Reveal = {
     text: string;
     authorId: PlayerId | null;
     votes: PlayerId[];
+    likes?: PlayerId[];
   }>;
   pointsDeltaByPlayer: Record<PlayerId, number>;
   totalDrawings: number;
+};
+
+export type GalleryItem = {
+  drawerId: PlayerId;
+  drawerName: string;
+  drawerColor: string;
+  prompt: string;
+  imageDataUrl: string;
+};
+
+export type Accolade = {
+  title: string;
+  icon: string;
+  playerName: string;
+  playerColor: string;
+  description: string;
 };
 
 export type RoomStatePublic = {
@@ -66,6 +86,12 @@ export type RoomStatePublic = {
   submitTimerSeconds?: number;
   voteTimerSeconds?: number;
   useExtraPrompt: boolean;
+  useRandomTricks?: boolean;
+  sameTrickForAll?: boolean;
+  finalChaosRound?: boolean;
+  fakeArtistInkLimit?: boolean;
+  fakeArtistInkBudget?: number;
+  fakeArtistWordPack?: string;
   lockColors: boolean;
   revealOrder: "random" | "round_robin";
   fakeArtistHighlight: boolean;
@@ -92,6 +118,7 @@ export type RoomStatePublic = {
   };
   vote?: {
     drawerId: PlayerId;
+    prompt?: string;
     imageDataUrl: string;
     options: Array<Pick<Option, "id" | "text">>;
     votedBy: PlayerId[];
@@ -99,6 +126,8 @@ export type RoomStatePublic = {
     totalDrawings: number;
   };
   reveal?: Reveal;
+  gallery?: GalleryItem[];
+  accolades?: Accolade[];
   fakeArtist?: {
     questionMasterId: PlayerId;
     fakeArtistId: PlayerId;

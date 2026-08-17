@@ -18,6 +18,7 @@ import { TitleScreen } from "./screens/TitleScreen";
 import { Sidebar } from "./components/Sidebar";
 import { AvatarScreen } from "./screens/AvatarScreen";
 import { SpectatorBanner } from "./components/SpectatorBanner";
+import { FloatingReactions } from "./components/FloatingReactions";
 
 const LS = {
   name: "teadraw:name",
@@ -61,6 +62,7 @@ export function App() {
   const [roomCode, setRoomCode] = useState(() => load(LS.roomCode));
   const [playerId, setPlayerId] = useState(() => load(LS.playerId));
   const [prompt, setPrompt] = useState(() => load(LS.prompt));
+  const [trick, setTrick] = useState<import("../types").TrickType | undefined>(undefined);
   const [error, setError] = useState<string>("");
   const [socketConnected, setSocketConnected] = useState(socket.connected);
 
@@ -69,10 +71,34 @@ export function App() {
   const playerIdRef = useRef(playerId);
   const nameRef = useRef(name);
   const roomRef = useRef(room);
+  // Auto-fill room code from URL parameter (#code=ABCD or ?code=ABCD)
   useEffect(() => { roomCodeRef.current = roomCode; }, [roomCode]);
   useEffect(() => { playerIdRef.current = playerId; }, [playerId]);
   useEffect(() => { nameRef.current = name; }, [name]);
   useEffect(() => { roomRef.current = room; }, [room]);
+
+  useEffect(() => {
+    const hashMatch = window.location.hash.match(/(?:code|room)?=?([A-Za-z0-9]{4})/i);
+    const searchMatch = window.location.search.match(/[?&](?:code|room)=([A-Za-z0-9]{4})/i);
+    const codeFromUrl = (searchMatch?.[1] || hashMatch?.[1])?.toUpperCase();
+    if (codeFromUrl && codeFromUrl.length === 4) {
+      setRoomCode(codeFromUrl);
+      save(LS.roomCode, codeFromUrl);
+      const savedName = load(LS.name);
+      if (savedName && savedName.trim().length > 0) {
+        setShowTitle(false);
+        const existingPid = load(LS.playerId) || undefined;
+        socket.emit("room:join", { roomCode: codeFromUrl, name: savedName.trim(), playerId: existingPid }, (resp: any) => {
+          if (resp?.ok && resp?.playerId) {
+            setPlayerId(resp.playerId);
+            save(LS.playerId, resp.playerId);
+          } else if (resp?.error) {
+            setError(resp.error);
+          }
+        });
+      }
+    }
+  }, [socket]);
 
   // Reset to home screen when room is gone (e.g. server restarted)
   const resetToHome = useCallback(() => {
@@ -83,8 +109,9 @@ export function App() {
 
   useEffect(() => {
     const onState = (s: RoomState) => setRoom(s);
-    const onPrompt = ({ prompt: p }: { prompt: string }) => {
+    const onPrompt = ({ prompt: p, trick: t }: { prompt: string; trick?: import("../types").TrickType }) => {
       setPrompt(p);
+      setTrick(t);
       save(LS.prompt, p);
     };
 
@@ -247,6 +274,7 @@ export function App() {
             room={room}
             me={me}
             prompt={prompt}
+            trick={trick}
             onSubmit={(imageDataUrl) => socket.emit("draw:submit", { roomCode: room.roomCode, playerId, imageDataUrl })}
           />
         );
@@ -277,7 +305,7 @@ export function App() {
             room={room}
             me={me}
             vote={room.vote}
-            onVote={(optionId) => socket.emit("vote:cast", { roomCode: room.roomCode, playerId, optionId })}
+            onVote={(optionId, likedOptionIds) => socket.emit("vote:cast", { roomCode: room.roomCode, playerId, optionId, likedOptionIds })}
           />
         );
 
@@ -373,6 +401,7 @@ export function App() {
 
   return (
     <div className="layout-split">
+      <FloatingReactions socket={socket} roomCode={room?.roomCode} playerId={me?.id} />
       {/* Disconnection overlay */}
       {!socketConnected && room && (
         <div className="disconnect-overlay">

@@ -1,12 +1,17 @@
 {
   "name": "teadraw",
-  "version": "1.4.4",
+  "version": "1.5.3",
   "private": true,
+  "type": "module",
   "workspaces": [
     "server",
     "client"
   ],
   "scripts": {
+    "sync-version": "node scripts/sync-version.js",
+    "prebuild": "node scripts/sync-version.js",
+    "predev": "node scripts/sync-version.js",
+    "predev:all": "node scripts/sync-version.js",
     "dev": "npm run dev -w server",
     "dev:client": "npm run dev -w client",
     "dev:all": "concurrently -n server,client -c yellow,cyan \"npm run dev -w server\" \"npm run dev -w client\"",

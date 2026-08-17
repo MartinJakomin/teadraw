@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type { RoomState } from "../../types";
+import QRCode from "qrcode";
 
 export function LobbyScreen(props: {
   room: RoomState;
@@ -13,6 +14,16 @@ export function LobbyScreen(props: {
 }) {
   const { room } = props;
   const [specMsg, setSpecMsg] = useState("");
+  const [qrUrl, setQrUrl] = useState("");
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const inviteUrl = `${window.location.origin}${window.location.pathname}#code=${room.roomCode}`;
+
+  useEffect(() => {
+    QRCode.toDataURL(inviteUrl, { width: 160, margin: 1, color: { dark: "#0f172a", light: "#ffffff" } })
+      .then((url) => setQrUrl(url))
+      .catch(() => {});
+  }, [inviteUrl]);
 
   const playingConnected = room.players.filter((p) => p.connected && !p.isSpectator).length;
   const bots = room.botCount ?? 0;
@@ -22,32 +33,57 @@ export function LobbyScreen(props: {
   return (
     <div className="page">
       <div className="card">
-        <div className="row space">
-          <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginBottom: "2rem" }}>
+        <div className="row space" style={{ alignItems: "flex-start" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "1.5rem" }}>
             <h2>Lobby</h2>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", height: "40px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <span className="muted" style={{ fontSize: "0.9rem", fontWeight: 600 }}>Room code:</span>
               <div
                 className="pill room-code-pill"
-                style={{ margin: 0, padding: "8px 16px", cursor: "pointer" }}
+                style={{ margin: 0, padding: "8px 18px", cursor: "pointer" }}
                 onClick={() => {
                   navigator.clipboard.writeText(room.roomCode);
-                  const el = document.getElementById("copy-toast");
-                  if (el) {
-                    el.classList.add("show");
-                    setTimeout(() => el.classList.remove("show"), 2000);
-                  }
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2000);
                 }}
                 title="Click to copy room code"
               >
                 {room.roomCode}
               </div>
-              <span id="copy-toast" className="copy-toast">Copied!</span>
+              <button
+                className="btn"
+                style={{ padding: "6px 14px", fontSize: "0.85rem" }}
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteUrl);
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2000);
+                }}
+              >
+                🔗 {copiedLink ? "Link Copied!" : "Copy Join Link"}
+              </button>
             </div>
           </div>
-          <button className="btn" onClick={props.onLeave}>
-            Leave
-          </button>
+
+          <div className="row" style={{ gap: "16px", alignItems: "center" }}>
+            {qrUrl && (
+              <div
+                style={{
+                  background: "#fff",
+                  padding: "6px",
+                  borderRadius: "12px",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+                  textAlign: "center"
+                }}
+                title="Scan with mobile camera to join instantly"
+              >
+                <img src={qrUrl} alt="QR Code" style={{ width: "90px", height: "90px", display: "block" }} />
+                <div style={{ color: "#0f172a", fontSize: "0.65rem", fontWeight: 800 }}>SCAN TO JOIN</div>
+              </div>
+            )}
+            <button className="btn" onClick={props.onLeave}>
+              Leave
+            </button>
+          </div>
         </div>
 
         <h3>Players</h3>
@@ -235,6 +271,45 @@ export function LobbyScreen(props: {
                 {room.gameType === "fake_artist" && (
                   <>
                     <div className="setting-row">
+                      <label>Themed Word Pack 📚:</label>
+                      <select
+                        disabled={!props.isHost}
+                        value={room.fakeArtistWordPack || "all"}
+                        onChange={(e) => props.onUpdateSettings({ fakeArtistWordPack: e.target.value })}
+                      >
+                        <option value="all">🌟 All Categories (Standard)</option>
+                        <option value="movies">🎬 Movies & TV</option>
+                        <option value="gaming">🎮 Gaming & Pop Culture</option>
+                        <option value="animals">🐾 Animals & Nature</option>
+                        <option value="food">🍕 Food & Drinks</option>
+                        <option value="landmarks">🗽 Landmarks & World</option>
+                        <option value="superheroes">🦸 Superheroes & Fantasy</option>
+                      </select>
+                    </div>
+                    <div className="setting-row">
+                      <label>Ink Meter (Stroke Budget) 🖋️:</label>
+                      <input
+                        type="checkbox"
+                        disabled={!props.isHost}
+                        checked={room.fakeArtistInkLimit || false}
+                        onChange={(e) => props.onUpdateSettings({ fakeArtistInkLimit: e.target.checked })}
+                      />
+                    </div>
+                    {room.fakeArtistInkLimit && (
+                      <div className="setting-row" style={{ paddingLeft: "1.2rem" }}>
+                        <label>Max Budget: {room.fakeArtistInkBudget || 600}px</label>
+                        <input
+                          type="range"
+                          min="200"
+                          max="1500"
+                          step="50"
+                          disabled={!props.isHost}
+                          value={room.fakeArtistInkBudget || 600}
+                          onChange={(e) => props.onUpdateSettings({ fakeArtistInkBudget: Number(e.target.value) })}
+                        />
+                      </div>
+                    )}
+                    <div className="setting-row">
                       <label>Highlight Strokes:</label>
                       <input
                         type="checkbox"
@@ -256,15 +331,48 @@ export function LobbyScreen(props: {
                 )}
 
                 {room.gameType === "drawful" && (
-                  <div className="setting-row">
-                    <label>Extra Random Prompt:</label>
-                    <input
-                      type="checkbox"
-                      disabled={!props.isHost}
-                      checked={room.useExtraPrompt}
-                      onChange={(e) => props.onUpdateSettings({ useExtraPrompt: e.target.checked })}
-                    />
-                  </div>
+                  <>
+                    <div className="setting-row">
+                      <label>Extra Random Prompt:</label>
+                      <input
+                        type="checkbox"
+                        disabled={!props.isHost}
+                        checked={room.useExtraPrompt}
+                        onChange={(e) => props.onUpdateSettings({ useExtraPrompt: e.target.checked })}
+                      />
+                    </div>
+                    <div className="setting-row">
+                      <label>Final Chaos Round 🔥:</label>
+                      <input
+                        type="checkbox"
+                        disabled={!props.isHost}
+                        checked={room.finalChaosRound || false}
+                        onChange={(e) => props.onUpdateSettings({ finalChaosRound: e.target.checked })}
+                      />
+                    </div>
+                    <div className="setting-row">
+                      <label>Random Trick Mode ⚡:</label>
+                      <input
+                        type="checkbox"
+                        disabled={!props.isHost}
+                        checked={room.useRandomTricks || false}
+                        onChange={(e) => props.onUpdateSettings({ useRandomTricks: e.target.checked })}
+                      />
+                    </div>
+                    {room.useRandomTricks && (
+                      <div className="setting-row" style={{ paddingLeft: "1.2rem" }}>
+                        <label>Trick Assignment:</label>
+                        <select
+                          disabled={!props.isHost}
+                          value={room.sameTrickForAll ? "same" : "random"}
+                          onChange={(e) => props.onUpdateSettings({ sameTrickForAll: e.target.value === "same" })}
+                        >
+                          <option value="random">Random Per Player</option>
+                          <option value="same">All Players Same Trick</option>
+                        </select>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}

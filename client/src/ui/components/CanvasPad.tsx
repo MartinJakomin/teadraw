@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StrokeEvent, StrokePoint } from "../../types";
 
-function getCanvasPos(evt: PointerEvent, canvas: HTMLCanvasElement): StrokePoint {
+function getCanvasPos(evt: PointerEvent, canvas: HTMLCanvasElement, isUpsideDown = false): StrokePoint {
   const rect = canvas.getBoundingClientRect();
+  const rawX = (evt.clientX - rect.left) * (canvas.width / rect.width);
+  const rawY = (evt.clientY - rect.top) * (canvas.height / rect.height);
   return {
-    x: (evt.clientX - rect.left) * (canvas.width / rect.width),
-    y: (evt.clientY - rect.top) * (canvas.height / rect.height)
+    x: isUpsideDown ? canvas.width - rawX : rawX,
+    y: isUpsideDown ? canvas.height - rawY : rawY
   };
 }
 
@@ -41,20 +43,74 @@ export function CanvasPad(props: {
   oneStrokeMode?: boolean;
   showShades?: boolean;
   endTime?: number;
+  trick?: import("../../types").TrickType;
+  inkLimit?: number;
 }) {
   const width = props.width ?? 900;
   const height = props.height ?? 550;
-  const strokeWidth = props.strokeWidth ?? 10;
+  const isSizeLocked = props.trick === "large_brush" || props.trick === "tiny_brush";
+  const strokeWidth = props.trick === "large_brush" ? 35 : props.trick === "tiny_brush" ? 3 : (props.strokeWidth ?? 10);
+
+  const isOneStroke = Boolean(props.oneStrokeMode || props.trick === "one_stroke");
+  const isBlind = props.trick === "blind";
+  const isUpsideDown = props.trick === "upside_down";
+  const isWobble = props.trick === "wobble";
+  const isMirror = props.trick === "mirror";
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [color, setColor] = useState(props.initialColor ?? "#111111");
   const [size, setSize] = useState(strokeWidth);
+  const activeStrokeWidth = isSizeLocked ? strokeWidth : size;
+
+  const effectiveInkLimit = props.trick === "ink_limit" ? 2000 : props.inkLimit;
+  const maxInk = effectiveInkLimit ?? 0;
+  const [inkRemaining, setInkRemaining] = useState<number>(maxInk);
+  const inkRemainingRef = useRef<number>(maxInk);
+
+  // Reset ink whenever it's a new turn / initialDataUrl changes / when unlocked
+  useEffect(() => {
+    if (effectiveInkLimit) {
+      inkRemainingRef.current = effectiveInkLimit;
+      setInkRemaining(effectiveInkLimit);
+    }
+  }, [effectiveInkLimit, props.initialDataUrl, props.disabled]);
+
+  useEffect(() => {
+    if (isSizeLocked) {
+      setSize(strokeWidth);
+    }
+  }, [isSizeLocked, strokeWidth]);
+
   const strokesRef = useRef<StrokeEvent[]>([]);
   const currentPointsRef = useRef<StrokePoint[]>([]);
   const strokeMovedRef = useRef(false);
   const strokeStartRef = useRef<StrokePoint | null>(null);
   const hasSubmittedRef = useRef(false);
+
+  // Keep live refs of all mutable properties so listeners NEVER need to re-bind
+  const colorRef = useRef(color);
+  colorRef.current = color;
+  const activeStrokeWidthRef = useRef(activeStrokeWidth);
+  activeStrokeWidthRef.current = activeStrokeWidth;
+  const isOneStrokeRef = useRef(isOneStroke);
+  isOneStrokeRef.current = isOneStroke;
+  const isUpsideDownRef = useRef(isUpsideDown);
+  isUpsideDownRef.current = isUpsideDown;
+  const isWobbleRef = useRef(isWobble);
+  isWobbleRef.current = isWobble;
+  const isMirrorRef = useRef(isMirror);
+  isMirrorRef.current = isMirror;
+  const disabledRef = useRef(props.disabled);
+  disabledRef.current = props.disabled;
+  const playerIdRef = useRef(props.playerId);
+  playerIdRef.current = props.playerId;
+  const maxInkRef = useRef(maxInk);
+  maxInkRef.current = maxInk;
+  const onSubmitRef = useRef(props.onSubmit);
+  onSubmitRef.current = props.onSubmit;
+  const onChangeRef = useRef(props.onChange);
+  onChangeRef.current = props.onChange;
 
   useEffect(() => {
     if (!props.disabled) {
@@ -73,12 +129,12 @@ export function CanvasPad(props: {
         const canvas = canvasRef.current;
         if (canvas) {
           const url = canvas.toDataURL("image/png");
-          props.onSubmit(url, strokesRef.current);
+          onSubmitRef.current(url, strokesRef.current);
         }
       }
     }, 500);
     return () => clearInterval(check);
-  }, [props.endTime, props.onSubmit]);
+  }, [props.endTime]);
 
   const colors = [
     "#000000", "#555555", "#aaaaaa", "#ffffff",
@@ -157,79 +213,148 @@ export function CanvasPad(props: {
     let drawing = false;
 
     const onDown = (evt: PointerEvent) => {
-      if (props.disabled || (props.oneStrokeMode && hasSubmittedRef.current)) return;
+      if (disabledRef.current || (isOneStrokeRef.current && hasSubmittedRef.current)) return;
       drawing = true;
       strokeMovedRef.current = false;
-      canvas.setPointerCapture(evt.pointerId);
-      const p = getCanvasPos(evt, canvas);
+      try {
+        canvas.setPointerCapture(evt.pointerId);
+      } catch {}
+      let p = getCanvasPos(evt, canvas, isUpsideDownRef.current);
+      if (isWobbleRef.current) {
+        const jX = (Math.random() - 0.5) * 16;
+        const jY = (Math.random() - 0.5) * 16;
+        p = { x: Math.max(0, Math.min(canvas.width, p.x + jX)), y: Math.max(0, Math.min(canvas.height, p.y + jY)) };
+      }
       strokeStartRef.current = p;
       currentPointsRef.current = [p];
 
       // Setup drawing styles for this stroke
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.strokeStyle = color;
-      ctx.lineWidth = size;
-
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
+      ctx.strokeStyle = colorRef.current;
+      ctx.lineWidth = activeStrokeWidthRef.current;
     };
 
     const onMove = (evt: PointerEvent) => {
-      if (!drawing || (props.oneStrokeMode && hasSubmittedRef.current)) return;
-      const p = getCanvasPos(evt, canvas);
+      if (!drawing || (isOneStrokeRef.current && hasSubmittedRef.current)) return;
+      const rawPos = getCanvasPos(evt, canvas, isUpsideDownRef.current);
+      let p = rawPos;
+      if (isWobbleRef.current) {
+        const angle = Date.now() / 35 + currentPointsRef.current.length * 0.5;
+        const jX = Math.sin(angle) * 16 + (Math.random() - 0.5) * 10;
+        const jY = Math.cos(angle) * 16 + (Math.random() - 0.5) * 10;
+        p = { x: Math.max(0, Math.min(canvas.width, p.x + jX)), y: Math.max(0, Math.min(canvas.height, p.y + jY)) };
+      }
+
+      if (maxInkRef.current > 0) {
+        const prev = currentPointsRef.current[currentPointsRef.current.length - 1];
+        if (prev) {
+          const segDist = Math.hypot(p.x - prev.x, p.y - prev.y);
+          if (inkRemainingRef.current - segDist <= 0) {
+            inkRemainingRef.current = 0;
+            setInkRemaining(0);
+            currentPointsRef.current.push(p);
+            ctx.beginPath();
+            ctx.moveTo(prev.x, prev.y);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+            if (isMirrorRef.current) {
+              ctx.beginPath();
+              ctx.moveTo(canvas.width - prev.x, prev.y);
+              ctx.lineTo(canvas.width - p.x, p.y);
+              ctx.stroke();
+            }
+            setHasDrawn(true);
+            onChangeRef.current?.();
+            onUp(evt);
+            return;
+          } else {
+            inkRemainingRef.current -= segDist;
+            setInkRemaining(inkRemainingRef.current);
+          }
+        }
+      }
+
+      const prev = currentPointsRef.current[currentPointsRef.current.length - 1];
       currentPointsRef.current.push(p);
       const st = strokeStartRef.current;
       if (st) {
         const dist = Math.hypot(p.x - st.x, p.y - st.y);
         if (dist > 2) strokeMovedRef.current = true;
       }
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
+
+      if (prev) {
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+
+        if (isMirrorRef.current) {
+          ctx.beginPath();
+          ctx.moveTo(canvas.width - prev.x, prev.y);
+          ctx.lineTo(canvas.width - p.x, p.y);
+          ctx.stroke();
+        }
+      }
 
       setHasDrawn(true);
-      props.onChange?.();
+      onChangeRef.current?.();
     };
 
     const onUp = (evt: PointerEvent) => {
-      if (props.oneStrokeMode && hasSubmittedRef.current) {
-        drawing = false;
+      if (!drawing) return;
+      drawing = false;
+
+      if (isOneStrokeRef.current && hasSubmittedRef.current) {
         return;
       }
 
-      if (drawing) {
-        if (currentPointsRef.current.length > 0) {
-          // If the pointer didn't move, it's a dot. We draw it now on release.
-          if (!strokeMovedRef.current) {
-            const p = currentPointsRef.current[0]!;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, size / 2, 0, Math.PI * 2);
-            ctx.fillStyle = color;
-            ctx.fill();
-
-            setHasDrawn(true);
-            props.onChange?.();
+      if (currentPointsRef.current.length > 0) {
+        // If the pointer didn't move, it's a dot. We draw it now on release.
+        if (!strokeMovedRef.current) {
+          const p = currentPointsRef.current[0]!;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, activeStrokeWidthRef.current / 2, 0, Math.PI * 2);
+          if (isMirrorRef.current) {
+            ctx.arc(canvas.width - p.x, p.y, activeStrokeWidthRef.current / 2, 0, Math.PI * 2);
           }
+          ctx.fillStyle = colorRef.current;
+          ctx.fill();
 
-          const newStroke: StrokeEvent = {
+          setHasDrawn(true);
+          onChangeRef.current?.();
+        }
+
+        const newStroke: StrokeEvent = {
+          id: Math.random().toString(36).substr(2, 9),
+          playerId: playerIdRef.current,
+          points: [...currentPointsRef.current],
+          brushSize: activeStrokeWidthRef.current,
+          color: hexToRgb(colorRef.current),
+          opacity: 1,
+          timestamp: Date.now()
+        };
+        strokesRef.current.push(newStroke);
+
+        if (isMirrorRef.current) {
+          strokesRef.current.push({
             id: Math.random().toString(36).substr(2, 9),
-            playerId: props.playerId,
-            points: [...currentPointsRef.current],
-            brushSize: size,
-            color: hexToRgb(color),
+            playerId: playerIdRef.current,
+            points: currentPointsRef.current.map(pt => ({ x: canvas.width - pt.x, y: pt.y })),
+            brushSize: activeStrokeWidthRef.current,
+            color: hexToRgb(colorRef.current),
             opacity: 1,
             timestamp: Date.now()
-          };
-          strokesRef.current.push(newStroke);
+          });
+        }
 
-          if (props.oneStrokeMode && canvasRef.current) {
-            hasSubmittedRef.current = true;
-            const url = canvasRef.current.toDataURL("image/png");
-            props.onSubmit(url, strokesRef.current);
-          }
+        if (isOneStrokeRef.current && canvasRef.current) {
+          hasSubmittedRef.current = true;
+          const url = canvasRef.current.toDataURL("image/png");
+          onSubmitRef.current(url, strokesRef.current);
         }
       }
-      drawing = false;
+
       strokeStartRef.current = null;
       currentPointsRef.current = [];
       try {
@@ -246,7 +371,7 @@ export function CanvasPad(props: {
       canvas.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [color, size, props.onChange, props.disabled, props.oneStrokeMode, props.onSubmit]);
+  }, []);
 
   const clear = () => {
     const canvas = canvasRef.current;
@@ -275,13 +400,65 @@ export function CanvasPad(props: {
 
   return (
     <div>
-      <div className="canvasWrap">
+      {maxInk > 0 && !props.disabled && (
+        <div
+          style={{
+            marginBottom: "12px",
+            background: "rgba(15, 23, 42, 0.7)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            borderRadius: "12px",
+            padding: "8px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)"
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: "0.85rem", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
+            <span>🖋️ Ink Gauge:</span>
+            <span style={{ color: inkRemaining < maxInk * 0.25 ? "#ef4444" : inkRemaining < maxInk * 0.5 ? "#f59e0b" : "#10b981" }}>
+              {Math.round((inkRemaining / maxInk) * 100)}%
+            </span>
+          </div>
+          <div style={{ flex: 1, height: "8px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "999px", overflow: "hidden" }}>
+            <div
+              style={{
+                width: `${Math.max(0, Math.min(100, (inkRemaining / maxInk) * 100))}%`,
+                height: "100%",
+                background: inkRemaining < maxInk * 0.25 ? "#ef4444" : inkRemaining < maxInk * 0.5 ? "#f59e0b" : "#10b981",
+                transition: "width 0.08s ease, background 0.2s ease"
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="canvasWrap" style={{ position: "relative" }}>
         <canvas
           ref={canvasRef}
           width={width}
           height={height}
           className="canvas"
+          style={{
+            ...(isBlind ? { opacity: 0.05, filter: "blur(20px)" } : {})
+          }}
         />
+        {isBlind && (
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            pointerEvents: "none",
+            background: "rgba(0,0,0,0.45)",
+            color: "#fff",
+            fontFamily: "Outfit, sans-serif",
+            fontWeight: 800,
+            fontSize: "1.5rem"
+          }}>
+            🙈 Blind Drawing Active! Strokes are hidden!
+          </div>
+        )}
       </div>
 
       {!props.disabled && (
@@ -301,15 +478,22 @@ export function CanvasPad(props: {
                 />
               ))}
             </div>
-            <div className="size-picker">
-              <label>Size:</label>
+            <div className="size-picker" style={{ opacity: isSizeLocked ? 0.8 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
+              <label>{isSizeLocked ? "🔒 Size:" : "Size:"}</label>
               <input
                 type="range"
                 min="2"
                 max="40"
-                value={size}
-                onChange={(e) => setSize(Number(e.target.value))}
+                value={isSizeLocked ? strokeWidth : size}
+                disabled={isSizeLocked}
+                onChange={(e) => !isSizeLocked && setSize(Number(e.target.value))}
+                title={isSizeLocked ? "Brush size is locked for this trick" : "Adjust brush size"}
               />
+              {isSizeLocked && (
+                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#f59e0b", whiteSpace: "nowrap" }}>
+                  {props.trick === "large_brush" ? "35px (Mega)" : "3px (Needle)"}
+                </span>
+              )}
             </div>
           </div>
 

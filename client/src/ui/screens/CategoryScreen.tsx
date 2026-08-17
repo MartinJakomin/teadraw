@@ -32,7 +32,7 @@ export function CategoryScreen(props: {
   };
 
   const randomIdeas = () => {
-    setHints(pickRandomHints(3));
+    setHints(pickRandomHints(4, props.room.fakeArtistWordPack));
   };
 
   const hasSubmittedRef = useRef(false);
@@ -51,13 +51,29 @@ export function CategoryScreen(props: {
     return () => clearInterval(check);
   }, [props.room.endTime, props.onSubmit, isQM, category, word]);
 
+  const packNameMap: Record<string, string> = {
+    movies: "🎬 Movies & TV",
+    gaming: "🎮 Gaming & Pop Culture",
+    animals: "🐾 Animals & Nature",
+    food: "🍕 Food & Drinks",
+    landmarks: "🗽 Landmarks & World",
+    superheroes: "🦸 Superheroes & Fantasy",
+    all: "🌟 All Categories"
+  };
+  const activePackLabel = packNameMap[props.room.fakeArtistWordPack || "all"] || "🌟 All Categories";
+
   return (
     <div className="page">
       <div className="card">
         <h2>You are the Question Master!</h2>
         <div className="muted">Choose a category and a secret word. Everyone except the Fake Artist will see them.</div>
 
-        <div style={{ marginTop: "2rem" }} />
+        <div style={{ marginTop: "1rem", display: "inline-block", padding: "6px 12px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "99px", fontSize: "0.85rem", fontWeight: 700 }}>
+          <span>Word Pack: </span>
+          <span style={{ color: "var(--primary2)" }}>{activePackLabel}</span>
+        </div>
+
+        <div style={{ marginTop: "1.5rem" }} />
 
         <div className="field">
           <label>Category (e.g. Animals)</label>
@@ -77,7 +93,7 @@ export function CategoryScreen(props: {
         <div className="row space" style={{ marginTop: "1rem", flexWrap: "wrap", gap: "12px" }}>
           <button type="button" className="btn btn-spectator-toggle" onClick={randomIdeas}>
             <span className="btn-toggle-icon">✨</span>
-            <span>Get 3 random ideas</span>
+            <span>Get ideas from {activePackLabel}</span>
           </button>
         </div>
 

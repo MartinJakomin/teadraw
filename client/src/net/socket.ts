@@ -11,7 +11,7 @@ export type ClientToServerEvents = {
   "game:start": (payload: { roomCode: string; playerId: string }, ack?: (resp: any) => void) => void;
   "draw:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string }, ack?: (resp: any) => void) => void;
   "clue:submit": (payload: { roomCode: string; playerId: string; text: string }, ack?: (resp: any) => void) => void;
-  "vote:cast": (payload: { roomCode: string; playerId: string; optionId: string }, ack?: (resp: any) => void) => void;
+  "vote:cast": (payload: { roomCode: string; playerId: string; optionId: string; likedOptionId?: string; likedOptionIds?: string[] }, ack?: (resp: any) => void) => void;
   "reveal:next": (payload: { roomCode: string; playerId: string }, ack?: (resp: any) => void) => void;
   "room:updateSettings": (payload: { roomCode: string; playerId: string } & Record<string, any>) => void;
   "avatar:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string; color: string; }) => void;

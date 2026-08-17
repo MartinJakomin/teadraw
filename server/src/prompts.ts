@@ -295,7 +295,107 @@ export const PROMPTS: string[] = [
   "A vampire checking themselves in a mirror",
   "A spider knitting a sweater",
   "An alien trying to eat spaghetti",
-  "A penguin building a sandcastle"
+  "A penguin building a sandcastle",
+  // --- New Additions (Concise & Punchy) ---
+  "Dragon drinking boba tea",
+  "T-Rex wearing a backpack",
+  "Hamster pirate captain",
+  "Grandma gaming champion",
+  "Detective searching for cookies",
+  "Shark afraid of water",
+  "Dog pretending to be a statue",
+  "Cat in a cardboard box",
+  "Raccoon washing cotton candy",
+  "Astronaut mowing the lawn",
+  "Pizza delivering a human",
+  "Wizard failing a driving test",
+  "Polar bear in swim trunks",
+  "Dinosaur DJ at a party",
+  "Owl wearing a smartwatch",
+  "Squirrel with a treasure chest",
+  "Snowman wearing a scarf in summer",
+  "Cactus drinking through a straw",
+  "Angry goose chasing someone",
+  "Chameleon hiding as wallpaper",
+  "Pug eating a whole pizza",
+  "Monkey solving a puzzle",
+  "Robot crying oil tears",
+  "Skeleton in a bubble bath",
+  "Flamingo on ice skates",
+  "Vampire putting on sunscreen",
+  "Ghost wearing a backward sheet",
+  "Mermaid in a fish tank",
+  "Bear eating with a fork",
+  "Kangaroo playing basketball",
+  "Crocodile brushing teeth",
+  "Koala arm wrestling",
+  "Giraffe stuck in a doorway",
+  "Watermelon crying seeds",
+  "Taco taking a siesta",
+  "Hyperactive espresso cup",
+  "Donut doing hula hoop",
+  "Banana sliding down a rainbow",
+  "Buff potato lifting weights",
+  "Meditating sushi roll",
+  "Washing machine eating socks",
+  "Phone running away from charger",
+  "Alarm clock getting smashed",
+  "Thirsty potted plant",
+  "Angry storm cloud",
+  "Pencil boxing an eraser",
+  "Paper airplane flying to space",
+  "Toilet paper escaping a cat",
+  "Rubber duck general",
+  "Goldfish dreaming of sharks",
+  "Butterfly lifting weights",
+  "Worm in a tiny fedora",
+  "Snail riding a skateboard",
+  "Supersonic speed turtle",
+  "Bat reading upside down",
+  "Pigeon fashion model",
+  "Seagull stealing pizza",
+  "Duck in yellow rainboots",
+  "Goat eating a tin can",
+  "Sheep with an afro haircut",
+  "Llama drinking a smoothie",
+  "Alpaca in a turtleneck",
+  "Walrus playing the accordion",
+  "Seal balancing a birthday cake",
+  "Crab DJ at the beach",
+  "Lobster giving a handshake",
+  "Octopus juggling ice cream",
+  "Whale in a top hat",
+  "Parrot giving bad directions",
+  "Knight fighting a rubber chicken",
+  "Princess rescuing a dragon",
+  "Superhero toaster",
+  "Cape caught in a door",
+  "Alien tourist taking photos",
+  "UFO abducting a cow",
+  "Time traveler paying with crypto",
+  "Zombie using wrinkle cream",
+  "Mummy untangling bandages",
+  "Monster scared of a mouse",
+  "Werewolf brushing fur",
+  "Bigfoot posing for a photo",
+  "Nessie asking for spare change",
+  "Leprechaun with a pot of pennies",
+  "Tooth fairy getting caught",
+  "Cupid with broken arrows",
+  "Ninja stepping on a squeaky toy",
+  "Spy disguised as a plant",
+  "Mime in an invisible box",
+  "King with a burger crown",
+  "Opera singer breaking glass",
+  "Conductor leading barking dogs",
+  "Rockstar smashing a ukulele",
+  "Artist painting a potato",
+  "Chef with a pancake on head",
+  "Waiter dropping soup",
+  "Lumberjack petting a flower",
+  "Crane building a sandcastle",
+  "Firefighter stuck in a tree",
+  "Traffic cop directing ducks"
 ];
 
 export function pickPrompts(count: number, usedPrompts?: Set<string>): string[] {
@@ -317,4 +417,92 @@ export function pickPrompts(count: number, usedPrompts?: Set<string>): string[] 
   }
   return picked;
 }
+
+const REPLACEMENTS: Record<string, string[]> = {
+  // Animals
+  cat: ["kitten", "raccoon", "tiger", "panther", "fox"],
+  dog: ["pug", "corgi", "golden retriever", "wolf", "poodle"],
+  dinosaur: ["T-Rex", "dragon", "lizard", "velociraptor"],
+  dragon: ["dinosaur", "giant lizard", "gargoyle"],
+  bear: ["polar bear", "panda", "grizzly bear"],
+  shark: ["dolphin", "whale", "swordfish", "megalodon"],
+  penguin: ["duck", "flamingo", "seagull", "pigeon"],
+  squirrel: ["hamster", "chipmunk", "raccoon", "mouse"],
+  snail: ["slug", "turtle", "sloth", "caterpillar"],
+  turtle: ["tortoise", "snail", "sloth"],
+  octopus: ["squid", "jellyfish", "crab", "lobster"],
+  rabbit: ["bunny", "hare", "hamster"],
+  monkey: ["chimpanzee", "gorilla", "baboon"],
+  cow: ["bull", "goat", "sheep", "llama"],
+  horse: ["unicorn", "donkey", "zebra"],
+
+  // Foods
+  pizza: ["giant pancake", "lasagna", "cheeseburger", "flatbread"],
+  spaghetti: ["ramen noodles", "pasta", "macaroni"],
+  burger: ["cheeseburger", "sandwich", "taco", "burrito"],
+  sandwich: ["panini", "sub roll", "burger", "burrito"],
+  coffee: ["hot cocoa", "boba tea", "espresso", "latte", "energy drink"],
+  tea: ["coffee", "smoothie", "boba", "lemonade"],
+  cake: ["birthday cake", "pie", "donut", "giant cupcake"],
+  donut: ["bagel", "cookie", "cupcake"],
+  cookie: ["biscuit", "brownie", "muffin", "waffle"],
+  banana: ["pineapple", "cucumber", "plantain"],
+  potato: ["avocado", "tomato", "sweet potato"],
+  taco: ["burrito", "quesadilla", "nachos"],
+
+  // Entities & Roles
+  robot: ["cyborg", "smart toaster", "mechanical man", "computer"],
+  alien: ["extraterrestrial", "astronaut", "monster", "martian"],
+  ghost: ["spooky phantom", "vampire", "poltergeist", "sheet monster"],
+  vampire: ["Dracula", "bat person", "werewolf", "zombie"],
+  zombie: ["mummy", "skeleton", "ghoul"],
+  pirate: ["sea captain", "sailor", "buccaneer"],
+  wizard: ["sorcerer", "magician", "warlock", "witch"],
+  superhero: ["vigilante", "masked hero", "crime fighter"],
+  detective: ["private eye", "police officer", "spy"],
+  clown: ["jester", "mime", "performer"],
+
+  // Actions
+  "riding a bicycle": ["riding a skateboard", "driving a scooter", "on rollerblades", "riding a unicycle"],
+  "baking cookies": ["cooking pancakes", "baking a cake", "grilling burgers"],
+  "taking a selfie": ["live streaming", "taking a portrait", "recording a video"],
+  "stuck in traffic": ["waiting in a long line", "stuck in an elevator", "trapped at a red light"],
+  "doing yoga": ["doing karate", "doing ballet", "stretching awkwardly", "doing gymnastics"],
+  "doing ballet": ["tap dancing", "doing karate", "breakdancing"],
+  "playing the drums": ["playing guitar", "playing trumpet", "playing DJ turntables"],
+  "eating spaghetti": ["eating messy noodles", "slurping ramen", "eating soup"],
+  "wearing sunglasses": ["wearing 3D glasses", "wearing a monocle", "wearing swim goggles"],
+  "planning a heist": ["stealing snacks", "sneaking around", "plotting revenge"]
+};
+
+export function generateSmartDecoyPrompt(realPrompt: string, activePrompts: Set<string>, usedPrompts?: Set<string>): string {
+  const normReal = realPrompt.trim().toLowerCase();
+
+  // Strategy 1: Find a distinct prompt from PROMPTS that shares a thematic subject/vibe
+  const words = normReal
+    .replace(/[^\w\s]/g, "")
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !["with", "this", "that", "from", "into", "over", "under", "about", "your", "their", "trying", "getting"].includes(w));
+
+  const thematicCandidates = PROMPTS.filter(p => {
+    const np = p.toLowerCase();
+    if (np === normReal || activePrompts.has(p)) return false;
+    return words.some(w => np.includes(w));
+  });
+
+  if (thematicCandidates.length > 0) {
+    return thematicCandidates[Math.floor(Math.random() * thematicCandidates.length)]!;
+  }
+
+  // Strategy 2: Pick an unused prompt from the pool
+  const pool = pickPrompts(30, usedPrompts).filter(p => p.toLowerCase() !== normReal && !activePrompts.has(p));
+  if (pool.length > 0) {
+    return pool[0]!;
+  }
+
+  const fallback = pickPrompts(50).filter(p => p.toLowerCase() !== normReal && !activePrompts.has(p));
+  return fallback[0] || "A mysterious masterpiece";
+}
+
+
 

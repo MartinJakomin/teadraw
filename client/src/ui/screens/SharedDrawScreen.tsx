@@ -82,6 +82,7 @@ export function SharedDrawScreen(props: {
             endTime={props.room.endTime}
             disabled={!isActive || isQM || spectating}
             oneStrokeMode={true}
+            inkLimit={props.room.fakeArtistInkLimit ? (props.room.fakeArtistInkBudget || 600) : undefined}
             onSubmit={(url, strokes) => {
               if (!url) return;
               props.onSubmit(url, strokes);
