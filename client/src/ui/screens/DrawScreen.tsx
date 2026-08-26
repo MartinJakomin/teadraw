@@ -27,8 +27,8 @@ export function DrawScreen(props: {
         return { icon: "✏️", title: "One Stroke Only", desc: "You only get 1 single stroke! Lifts lock your drawing." };
       case "large_brush":
         return { icon: "🖌️", title: "Mega Brush", desc: "Locked to extra thick brush strokes (35px)!" };
-      case "tiny_brush":
-        return { icon: "🔍", title: "Needle Brush", desc: "Locked to extra thin brush strokes (3px)!" };
+      case "random_brush":
+        return { icon: "🎲", title: "Brush Roulette", desc: "Locked slider! Brush automatically switches between random sizes as you draw!" };
       case "half_time":
         return { icon: "⚡", title: "Speed Rush", desc: "Fixed 20-second rush! Hurry up and draw before time runs out!" };
       case "upside_down":
@@ -102,15 +102,15 @@ export function DrawScreen(props: {
               <div className="chaos-rule-item">
                 <span className="chaos-rule-icon">🕵️</span>
                 <div>
-                  <b>Guess the Artist</b>
-                  <p>Clue writing is skipped! In voting, everyone tries to guess who drew which drawing.</p>
+                  <b>Secret Simultaneous Guessing</b>
+                  <p>Receive all drawings at once in secret and guess who drew which piece!</p>
                 </div>
               </div>
               <div className="chaos-rule-item">
                 <span className="chaos-rule-icon">🏆</span>
                 <div>
-                  <b>Chaos Scoring</b>
-                  <p>+3 pts for identifying the artist, +2 pts to the artist per person who recognizes their art!</p>
+                  <b>Chaos Scoring (1 pt per guess)</b>
+                  <p>Earn +1 point for each correct artist you identify (maximum N-1 points)!</p>
                 </div>
               </div>
             </div>

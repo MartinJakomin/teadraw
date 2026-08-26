@@ -48,8 +48,9 @@ export function CanvasPad(props: {
 }) {
   const width = props.width ?? 900;
   const height = props.height ?? 550;
-  const isSizeLocked = props.trick === "large_brush" || props.trick === "tiny_brush";
-  const strokeWidth = props.trick === "large_brush" ? 35 : props.trick === "tiny_brush" ? 3 : (props.strokeWidth ?? 10);
+  const isRandomBrush = props.trick === "random_brush";
+  const isSizeLocked = props.trick === "large_brush" || isRandomBrush;
+  const strokeWidth = props.trick === "large_brush" ? 35 : (props.strokeWidth ?? 10);
 
   const isOneStroke = Boolean(props.oneStrokeMode || props.trick === "one_stroke");
   const isBlind = props.trick === "blind";
@@ -77,22 +78,26 @@ export function CanvasPad(props: {
   }, [effectiveInkLimit, props.initialDataUrl, props.disabled]);
 
   useEffect(() => {
-    if (isSizeLocked) {
+    if (isSizeLocked && !isRandomBrush) {
       setSize(strokeWidth);
     }
-  }, [isSizeLocked, strokeWidth]);
+  }, [isSizeLocked, isRandomBrush, strokeWidth]);
 
   const strokesRef = useRef<StrokeEvent[]>([]);
   const currentPointsRef = useRef<StrokePoint[]>([]);
   const strokeMovedRef = useRef(false);
   const strokeStartRef = useRef<StrokePoint | null>(null);
   const hasSubmittedRef = useRef(false);
+  const currentDynamicSizeRef = useRef<number>(14);
+  const pointsSinceSizeShiftRef = useRef<number>(0);
 
   // Keep live refs of all mutable properties so listeners NEVER need to re-bind
   const colorRef = useRef(color);
   colorRef.current = color;
   const activeStrokeWidthRef = useRef(activeStrokeWidth);
   activeStrokeWidthRef.current = activeStrokeWidth;
+  const isRandomBrushRef = useRef(isRandomBrush);
+  isRandomBrushRef.current = isRandomBrush;
   const isOneStrokeRef = useRef(isOneStroke);
   isOneStrokeRef.current = isOneStroke;
   const isUpsideDownRef = useRef(isUpsideDown);
@@ -232,7 +237,14 @@ export function CanvasPad(props: {
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = colorRef.current;
-      ctx.lineWidth = activeStrokeWidthRef.current;
+      if (isRandomBrushRef.current) {
+        const randomSizes = [4, 8, 14, 22, 32, 42];
+        currentDynamicSizeRef.current = randomSizes[Math.floor(Math.random() * randomSizes.length)]!;
+        pointsSinceSizeShiftRef.current = 0;
+        ctx.lineWidth = currentDynamicSizeRef.current;
+      } else {
+        ctx.lineWidth = activeStrokeWidthRef.current;
+      }
     };
 
     const onMove = (evt: PointerEvent) => {
@@ -244,6 +256,16 @@ export function CanvasPad(props: {
         const jX = Math.sin(angle) * 16 + (Math.random() - 0.5) * 10;
         const jY = Math.cos(angle) * 16 + (Math.random() - 0.5) * 10;
         p = { x: Math.max(0, Math.min(canvas.width, p.x + jX)), y: Math.max(0, Math.min(canvas.height, p.y + jY)) };
+      }
+
+      if (isRandomBrushRef.current) {
+        pointsSinceSizeShiftRef.current += 1;
+        if (pointsSinceSizeShiftRef.current >= 6) {
+          pointsSinceSizeShiftRef.current = 0;
+          const randomSizes = [4, 8, 14, 22, 32, 42];
+          currentDynamicSizeRef.current = randomSizes[Math.floor(Math.random() * randomSizes.length)]!;
+          ctx.lineWidth = currentDynamicSizeRef.current;
+        }
       }
 
       if (maxInkRef.current > 0) {
@@ -310,13 +332,14 @@ export function CanvasPad(props: {
       }
 
       if (currentPointsRef.current.length > 0) {
+        const effectiveStrokeSize = isRandomBrushRef.current ? currentDynamicSizeRef.current : activeStrokeWidthRef.current;
         // If the pointer didn't move, it's a dot. We draw it now on release.
         if (!strokeMovedRef.current) {
           const p = currentPointsRef.current[0]!;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, activeStrokeWidthRef.current / 2, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, effectiveStrokeSize / 2, 0, Math.PI * 2);
           if (isMirrorRef.current) {
-            ctx.arc(canvas.width - p.x, p.y, activeStrokeWidthRef.current / 2, 0, Math.PI * 2);
+            ctx.arc(canvas.width - p.x, p.y, effectiveStrokeSize / 2, 0, Math.PI * 2);
           }
           ctx.fillStyle = colorRef.current;
           ctx.fill();
@@ -329,7 +352,7 @@ export function CanvasPad(props: {
           id: Math.random().toString(36).substr(2, 9),
           playerId: playerIdRef.current,
           points: [...currentPointsRef.current],
-          brushSize: activeStrokeWidthRef.current,
+          brushSize: effectiveStrokeSize,
           color: hexToRgb(colorRef.current),
           opacity: 1,
           timestamp: Date.now()
@@ -341,7 +364,7 @@ export function CanvasPad(props: {
             id: Math.random().toString(36).substr(2, 9),
             playerId: playerIdRef.current,
             points: currentPointsRef.current.map(pt => ({ x: canvas.width - pt.x, y: pt.y })),
-            brushSize: activeStrokeWidthRef.current,
+            brushSize: effectiveStrokeSize,
             color: hexToRgb(colorRef.current),
             opacity: 1,
             timestamp: Date.now()
@@ -491,7 +514,7 @@ export function CanvasPad(props: {
               />
               {isSizeLocked && (
                 <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#f59e0b", whiteSpace: "nowrap" }}>
-                  {props.trick === "large_brush" ? "35px (Mega)" : "3px (Needle)"}
+                  {props.trick === "large_brush" ? "35px (Mega)" : "🎲 Dynamic (Morphing)"}
                 </span>
               )}
             </div>

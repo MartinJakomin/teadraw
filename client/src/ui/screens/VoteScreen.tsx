@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import type { RoomState } from "../../types";
 import { PlayerOrderStrip } from "../components/PlayerOrderStrip";
+import { TrickBadge } from "../components/TrickBadge";
 
 function drawfulVoteParticipants(room: RoomState, drawerId: string) {
   return room.players.filter((p) => p.id !== drawerId && !p.isSpectator).length;
@@ -9,22 +10,39 @@ function drawfulVoteParticipants(room: RoomState, drawerId: string) {
 export function VoteScreen(props: {
   room: RoomState;
   me: RoomState["players"][number];
-  vote: NonNullable<RoomState["vote"]>;
+  vote?: RoomState["vote"];
+  chaosVote?: RoomState["chaosVote"];
   onVote: (optionId: string, likedOptionIds?: string[]) => void;
+  onChaosVote?: (votes: Record<string, string>) => void;
 }) {
   const isChaos = Boolean(props.room.finalChaosRound && props.room.round > props.room.totalRounds);
-  const isDrawer = props.vote.drawerId === props.me.id;
-  const already = useMemo(() => props.vote.votedBy.includes(props.me.id), [props.me.id, props.vote.votedBy]);
+  const spectating = Boolean(props.me.isSpectator);
+
+  // Normal vote state
+  const isDrawer = props.vote?.drawerId === props.me.id;
+  const alreadyNormal = useMemo(() => props.vote?.votedBy.includes(props.me.id) ?? false, [props.me.id, props.vote?.votedBy]);
   const [picked, setPicked] = useState<string>("");
   const [likedIds, setLikedIds] = useState<string[]>([]);
 
-  const drawer = props.room.players.find((p) => p.id === props.vote.drawerId);
-  const drawerName = drawer?.name ?? "Someone";
-  const spectating = Boolean(props.me.isSpectator);
-  const stripIds = props.room.drawingPlayerOrder ?? [];
-  const expectedVotes = drawfulVoteParticipants(props.room, props.vote.drawerId);
+  // Chaos vote state
+  const chaosDrawings = useMemo(() => {
+    if (!props.room.chaosVote) return [];
+    if (spectating) return props.room.chaosVote.drawings;
+    return props.room.chaosVote.drawings.filter((d) => d.drawerId !== props.me.id);
+  }, [props.room.chaosVote, spectating, props.me.id]);
 
-  const handleVote = (optionId: string) => {
+  const eligibleChaosArtists = useMemo(() => {
+    return props.room.players.filter((p) => !p.isSpectator && (spectating || p.id !== props.me.id));
+  }, [props.room.players, spectating, props.me.id]);
+
+  const alreadyChaos = useMemo(() => {
+    return props.room.chaosVote?.votedBy.includes(props.me.id) ?? false;
+  }, [props.me.id, props.room.chaosVote?.votedBy]);
+
+  const [chaosPicks, setChaosPicks] = useState<Record<string, string>>({});
+  const [submittingChaos, setSubmittingChaos] = useState(false);
+
+  const handleNormalVote = (optionId: string) => {
     setPicked(optionId);
     props.onVote(optionId, likedIds);
   };
@@ -40,22 +58,216 @@ export function VoteScreen(props: {
     }
   };
 
+  const handlePickChaosArtist = (drawingId: string, artistId: string) => {
+    if (spectating || alreadyChaos || submittingChaos) return;
+    setChaosPicks((prev) => ({ ...prev, [drawingId]: artistId }));
+  };
+
+  const submitChaosVotes = () => {
+    if (spectating || alreadyChaos || submittingChaos || !props.onChaosVote) return;
+    setSubmittingChaos(true);
+    props.onChaosVote(chaosPicks);
+  };
+
+  // Auto-submit Chaos votes when timer expires
+  const hasAutoSubmittedChaosRef = useRef(false);
+  useEffect(() => {
+    if (!isChaos || !props.room.endTime || hasAutoSubmittedChaosRef.current || alreadyChaos || spectating) return;
+    const check = setInterval(() => {
+      const remaining = props.room.endTime! - Date.now();
+      if (remaining <= 0 && !hasAutoSubmittedChaosRef.current) {
+        hasAutoSubmittedChaosRef.current = true;
+        clearInterval(check);
+        // Fill any unpicked drawing with a random pick
+        const finalPicks: Record<string, string> = { ...chaosPicks };
+        for (const d of chaosDrawings) {
+          if (!finalPicks[d.id] && eligibleChaosArtists.length > 0) {
+            const randomPick = eligibleChaosArtists[Math.floor(Math.random() * eligibleChaosArtists.length)]!;
+            finalPicks[d.id] = randomPick.id;
+          }
+        }
+        props.onChaosVote?.(finalPicks);
+      }
+    }, 500);
+    return () => clearInterval(check);
+  }, [isChaos, props.room.endTime, alreadyChaos, spectating, chaosPicks, chaosDrawings, eligibleChaosArtists, props.onChaosVote]);
+
+  // Render Chaos simultaneous voting
+  if (isChaos && props.room.chaosVote) {
+    const totalNeeded = chaosDrawings.length;
+    const totalPicked = Object.keys(chaosPicks).length;
+    const isComplete = totalPicked >= totalNeeded && totalNeeded > 0;
+    const totalActiveVoters = props.room.players.filter((p) => !p.isSpectator).length;
+
+    return (
+      <div className="page">
+        <div className="card">
+          <div className="row space">
+            <div>
+              <h2>🔥 Final Chaos Round: Who Drew What?</h2>
+              <div className="muted" style={{ marginTop: "6px" }}>
+                Match each drawing to the artist who drew it! All votes are cast simultaneously in secret.
+              </div>
+            </div>
+          </div>
+
+          {props.room.chaosVote.prompt && (
+            <div
+              style={{
+                margin: "1.2rem 0",
+                padding: "12px 20px",
+                borderRadius: "14px",
+                background: "linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(249, 115, 22, 0.2))",
+                border: "1px solid rgba(249, 115, 22, 0.45)",
+                color: "#fff",
+                textAlign: "center",
+                fontSize: "1.1rem",
+                fontWeight: 700
+              }}
+            >
+              🔥 Shared Secret Prompt: <b style={{ color: "#fef08a" }}>"{props.room.chaosVote.prompt}"</b>
+            </div>
+          )}
+
+          {spectating && (
+            <div className="muted" style={{ marginBottom: "1rem", textAlign: "center" }}>
+              👀 You are spectating — waiting for players to submit their secret guesses.
+            </div>
+          )}
+
+          <div className="chaos-vote-grid">
+            {chaosDrawings.map((drawing, idx) => {
+              const currentChoiceId = chaosPicks[drawing.id];
+              return (
+                <div key={drawing.id} className="chaos-drawing-card">
+                  <div className="chaos-card-header">
+                    <span className="chaos-drawing-badge">Drawing #{idx + 1}</span>
+                    {currentChoiceId ? (
+                      <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#10b981" }}>
+                        Picked: {props.room.players.find((p) => p.id === currentChoiceId)?.name} ✓
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "#f59e0b" }}>
+                        Pick an artist
+                      </span>
+                    )}
+                  </div>
+
+                  <img src={drawing.imageDataUrl} alt={`Drawing ${idx + 1}`} className="chaos-drawing-img" />
+
+                  {!spectating && (
+                    <div>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "rgba(255, 255, 255, 0.7)", marginBottom: "8px" }}>
+                        Who drew this?
+                      </div>
+                      <div className="chaos-artist-chips">
+                        {eligibleChaosArtists.map((artist) => {
+                          const isSelected = currentChoiceId === artist.id;
+                          return (
+                            <button
+                              key={artist.id}
+                              type="button"
+                              disabled={alreadyChaos || submittingChaos}
+                              className={`chaos-artist-chip ${isSelected ? "selected" : ""}`}
+                              onClick={() => handlePickChaosArtist(drawing.id, artist.id)}
+                            >
+                              {artist.avatarUrl ? (
+                                <img
+                                  src={artist.avatarUrl}
+                                  alt={artist.name}
+                                  style={{ width: "20px", height: "20px", borderRadius: "50%", border: `1.5px solid ${artist.color}` }}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    borderRadius: "50%",
+                                    background: artist.color,
+                                    color: "#fff",
+                                    fontSize: "0.7rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontWeight: 900
+                                  }}
+                                >
+                                  {artist.name[0]?.toUpperCase()}
+                                </span>
+                              )}
+                              <span style={{ color: isSelected ? "#fff" : artist.color }}>{artist.name}</span>
+                              {isSelected && <span style={{ color: "#f97316", fontWeight: 900 }}>✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {!spectating && (
+            <div className="chaos-status-bar">
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontWeight: 800, fontSize: "0.95rem" }}>
+                  {alreadyChaos ? "✅ Guesses Locked In" : `Progress: ${totalPicked}/${totalNeeded} Guessed`}
+                </span>
+                <span className="muted small">
+                  ({props.room.chaosVote.votedBy.length}/{totalActiveVoters} players finished)
+                </span>
+              </div>
+
+              {alreadyChaos ? (
+                <div style={{ color: "#fed7aa", fontWeight: 700, fontSize: "0.9rem" }}>
+                  Waiting for other players to finish…
+                </div>
+              ) : (
+                <button
+                  className="btn primary"
+                  disabled={!isComplete || submittingChaos}
+                  onClick={submitChaosVotes}
+                  style={{
+                    padding: "10px 24px",
+                    fontWeight: 800,
+                    background: "linear-gradient(135deg, #f97316, #ef4444)",
+                    boxShadow: "0 4px 15px rgba(249, 115, 22, 0.4)"
+                  }}
+                >
+                  {submittingChaos ? "Locking in…" : `Lock In Guesses 🔥 (${totalPicked}/${totalNeeded})`}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Regular Drawful single-drawing vote
+  const currentVote = props.vote;
+  if (!currentVote) return null;
+
+  const drawer = props.room.players.find((p) => p.id === currentVote.drawerId);
+  const drawerName = drawer?.name ?? "Someone";
+  const stripIds = props.room.drawingPlayerOrder ?? [];
+  const expectedVotes = drawfulVoteParticipants(props.room, currentVote.drawerId);
+
   return (
     <div className="page">
       <div className="card">
         <div className="row space">
           <div>
-            <h2>{isChaos ? "🔥 Chaos Round: Who drew this?" : "Vote"}</h2>
+            <h2>Vote</h2>
             <div className="muted" style={{ marginTop: "8px" }}>
-              {isChaos
-                ? "Everyone drew the exact same prompt! Guess who drew this one!"
-                : "Which prompt is the real one? Tap 😂 to award a Comedy Like to your favorite lie!"}
+              Which prompt is the real one? Tap 😂 to award a Comedy Like to your favorite lie!
             </div>
           </div>
         </div>
 
-        {!isChaos && (
-          <div className="drawer-info" style={{ display: "flex", alignItems: "center", gap: "12px", margin: "1.2rem 0" }}>
+        <div className="drawer-info" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "1.2rem 0", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             {drawer?.avatarUrl && (
               <img src={drawer.avatarUrl} alt="drawer" className="avatar-small" style={{ border: `2px solid ${drawer.color}` }} />
             )}
@@ -63,27 +275,10 @@ export function VoteScreen(props: {
               Drawing by <b style={{ color: drawer?.color }}>{drawerName}</b>
             </div>
           </div>
-        )}
+          {currentVote.trick && <TrickBadge trick={currentVote.trick} />}
+        </div>
 
-        {isChaos && props.vote.prompt && (
-          <div
-            style={{
-              margin: "1rem 0",
-              padding: "10px 16px",
-              borderRadius: "12px",
-              background: "linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(249, 115, 22, 0.2))",
-              border: "1px solid rgba(249, 115, 22, 0.4)",
-              color: "#fff",
-              textAlign: "center",
-              fontSize: "1rem",
-              fontWeight: 700
-            }}
-          >
-            🔥 Shared Prompt: <b style={{ color: "#fef08a" }}>"{props.vote.prompt}"</b>
-          </div>
-        )}
-
-        <img className="img" src={props.vote.imageDataUrl} alt="drawing" />
+        <img className="img" src={currentVote.imageDataUrl} alt="drawing" />
 
         {spectating ? (
           <div className="muted" style={{ marginTop: "1rem" }}>
@@ -102,75 +297,18 @@ export function VoteScreen(props: {
               textAlign: "center"
             }}
           >
-            🕵️ This is your drawing! Waiting for other players to guess that you drew it…
+            🕵️ You drew this! Waiting for others to vote…
           </div>
-        ) : null}
-        {!spectating && !isDrawer && already ? (
+        ) : alreadyNormal ? (
           <div className="muted" style={{ textAlign: "center", margin: "1rem 0" }}>
-            ✅ Guess submitted! Waiting for other players…
+            ✅ Vote cast! Waiting for other players…
           </div>
         ) : null}
 
         <div className="grid">
-          {props.vote.options.map((o) => {
-            const isMyClue = isChaos ? o.id === props.me.id : o.text === localStorage.getItem("teadraw:myClue");
+          {currentVote.options.map((o) => {
+            const isMyClue = o.text === localStorage.getItem("teadraw:myClue");
             const isLiked = likedIds.includes(o.id);
-            const playerOption = isChaos ? props.room.players.find((p) => p.id === o.id) : null;
-
-            if (isChaos && playerOption) {
-              return (
-                <div
-                  key={o.id}
-                  className={`chaos-player-card ${picked === o.id ? "picked" : ""} ${isMyClue ? "disabled-clue" : ""}`}
-                  style={{
-                    cursor: (spectating || isDrawer || isMyClue) ? "default" : "pointer",
-                    opacity: isMyClue ? 0.6 : 1
-                  }}
-                  onClick={() => {
-                    if (spectating || isDrawer || isMyClue) return;
-                    handleVote(o.id);
-                  }}
-                >
-                  {playerOption.avatarUrl ? (
-                    <img
-                      src={playerOption.avatarUrl}
-                      alt={playerOption.name}
-                      style={{
-                        width: "44px",
-                        height: "44px",
-                        borderRadius: "50%",
-                        border: `3px solid ${playerOption.color}`,
-                        objectFit: "cover"
-                      }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: "44px",
-                        height: "44px",
-                        borderRadius: "50%",
-                        background: playerOption.color,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: 900,
-                        color: "#fff",
-                        fontSize: "1.2rem"
-                      }}
-                    >
-                      {playerOption.name[0]?.toUpperCase()}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1 }}>
-                    <span style={{ fontWeight: 800, fontSize: "1.05rem", color: playerOption.color }}>
-                      {playerOption.name}
-                    </span>
-                    {isMyClue && <span style={{ fontSize: "0.75rem", color: "rgba(255, 255, 255, 0.5)", fontWeight: 600 }}>You (cannot vote for self)</span>}
-                    {picked === o.id && <span style={{ fontSize: "0.75rem", color: "#f97316", fontWeight: 700 }}>Your Pick ✓</span>}
-                  </div>
-                </div>
-              );
-            }
 
             return (
               <div
@@ -179,15 +317,15 @@ export function VoteScreen(props: {
                 style={{ position: "relative", cursor: (spectating || isDrawer || isMyClue) ? "default" : "pointer" }}
                 onClick={() => {
                   if (spectating || isDrawer || isMyClue) return;
-                  handleVote(o.id);
+                  handleNormalVote(o.id);
                 }}
               >
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1, paddingRight: isMyClue || isChaos ? 0 : "36px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1, paddingRight: isMyClue ? 0 : "36px" }}>
                   <span className="vote-option-text">{o.text}</span>
-                  {isMyClue && <span className="vote-option-subtext">{isChaos ? "you" : "your lie"}</span>}
+                  {isMyClue && <span className="vote-option-subtext">your lie</span>}
                 </div>
 
-                {!isChaos && !isMyClue && !spectating && (
+                {!isMyClue && !spectating && (
                   <button
                     type="button"
                     title="Award Comedy Like"
@@ -218,21 +356,20 @@ export function VoteScreen(props: {
         </div>
 
         <div style={{ marginTop: "1.5rem" }}>
-          {!isChaos && (
-            <PlayerOrderStrip
-              players={props.room.players}
-              orderedPlayerIds={stripIds}
-              activePlayerId={props.vote.drawerId}
-            />
-          )}
+          <PlayerOrderStrip
+            players={props.room.players}
+            orderedPlayerIds={stripIds}
+            activePlayerId={currentVote.drawerId}
+          />
           <div className="muted small" style={{ marginTop: "10px", textAlign: "center" }}>
-            Drawing {props.vote.drawingIndex + 1} of {props.vote.totalDrawings}
+            Drawing {currentVote.drawingIndex + 1} of {currentVote.totalDrawings}
           </div>
           <div className="muted small" style={{ marginTop: "4px", textAlign: "center" }}>
-            Voted: {props.vote.votedBy.length}/{expectedVotes}
+            Voted: {currentVote.votedBy.length}/{expectedVotes}
           </div>
         </div>
       </div>
     </div>
   );
 }
+

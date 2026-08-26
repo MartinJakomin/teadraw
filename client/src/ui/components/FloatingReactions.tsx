@@ -11,7 +11,7 @@ type FloatingEmote = {
 
 export function FloatingReactions(props: { socket: Socket; roomCode?: string; playerId?: string }) {
   const [emotes, setEmotes] = useState<FloatingEmote[]>([]);
-  const reactions = ["😂", "🔥", "😱", "👏", "🎨", "💯", "💀", "🤯", "💩", "🥳", "❤️", "👀", "🤡", "🚀", "🤔", "👑"];
+  const reactions = ["😂", "🔥", "😱", "👏", "🎨", "💯", "💀", "🤯", "💩", "🥳", "❤️", "👀", "🤡", "🚀", "🤔", "👑", "⏳"];
 
   useEffect(() => {
     const onReaction = ({ id, emoji, senderName }: { id: string; emoji: string; senderId?: string; senderName?: string }) => {

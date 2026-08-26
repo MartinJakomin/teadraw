@@ -26,7 +26,7 @@ export type Player = {
   isSpectator?: boolean;
 };
 
-export type TrickType = "blind" | "one_stroke" | "large_brush" | "tiny_brush" | "half_time" | "upside_down" | "wobble" | "mirror" | "ink_limit";
+export type TrickType = "blind" | "one_stroke" | "large_brush" | "random_brush" | "half_time" | "upside_down" | "wobble" | "mirror" | "ink_limit";
 
 export type Drawing = {
   drawerId: PlayerId;
@@ -47,6 +47,7 @@ export type Reveal = {
   drawerId: PlayerId;
   prompt: string;
   imageDataUrl: string;
+  trick?: TrickType;
   options: Array<{
     id: string;
     text: string;
@@ -64,6 +65,7 @@ export type GalleryItem = {
   drawerColor: string;
   prompt: string;
   imageDataUrl: string;
+  trick?: TrickType;
 };
 
 export type Accolade = {
@@ -72,6 +74,38 @@ export type Accolade = {
   playerName: string;
   playerColor: string;
   description: string;
+};
+
+export type ChaosVoteDrawing = {
+  id: string;
+  drawerId: PlayerId;
+  imageDataUrl: string;
+};
+
+export type ChaosRevealDrawing = {
+  id: string;
+  drawerId: PlayerId;
+  drawerName: string;
+  drawerColor: string;
+  drawerAvatar?: string;
+  imageDataUrl: string;
+  guesses: Array<{
+    voterId: PlayerId;
+    voterName: string;
+    voterColor: string;
+    voterAvatar?: string;
+    guessedId?: PlayerId;
+    guessedName: string;
+    guessedColor: string;
+    isCorrect: boolean;
+  }>;
+};
+
+export type ChaosReveal = {
+  prompt: string;
+  drawings: ChaosRevealDrawing[];
+  pointsDeltaByPlayer: Record<PlayerId, number>;
+  totalDrawings: number;
 };
 
 export type RoomStatePublic = {
@@ -112,6 +146,7 @@ export type RoomStatePublic = {
   submit?: {
     drawerId: PlayerId;
     imageDataUrl: string;
+    trick?: TrickType;
     submittedBy: PlayerId[];
     drawingIndex: number;
     totalDrawings: number;
@@ -120,12 +155,20 @@ export type RoomStatePublic = {
     drawerId: PlayerId;
     prompt?: string;
     imageDataUrl: string;
+    trick?: TrickType;
     options: Array<Pick<Option, "id" | "text">>;
     votedBy: PlayerId[];
     drawingIndex: number;
     totalDrawings: number;
   };
   reveal?: Reveal;
+  chaosVote?: {
+    prompt: string;
+    drawings: ChaosVoteDrawing[];
+    votedBy: PlayerId[];
+    totalVoters: number;
+  };
+  chaosReveal?: ChaosReveal;
   gallery?: GalleryItem[];
   accolades?: Accolade[];
   fakeArtist?: {

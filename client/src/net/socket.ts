@@ -12,6 +12,7 @@ export type ClientToServerEvents = {
   "draw:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string }, ack?: (resp: any) => void) => void;
   "clue:submit": (payload: { roomCode: string; playerId: string; text: string }, ack?: (resp: any) => void) => void;
   "vote:cast": (payload: { roomCode: string; playerId: string; optionId: string; likedOptionId?: string; likedOptionIds?: string[] }, ack?: (resp: any) => void) => void;
+  "vote:chaos": (payload: { roomCode: string; playerId: string; votes: Record<string, string> }, ack?: (resp: any) => void) => void;
   "reveal:next": (payload: { roomCode: string; playerId: string }, ack?: (resp: any) => void) => void;
   "room:updateSettings": (payload: { roomCode: string; playerId: string } & Record<string, any>) => void;
   "avatar:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string; color: string; }) => void;
@@ -28,7 +29,8 @@ export type ClientToServerEvents = {
 
 export type ServerToClientEvents = {
   "room:state": (state: RoomState) => void;
-  "prompt:you": (payload: { prompt: string }) => void;
+  "prompt:you": (payload: { prompt: string; trick?: import("../types").TrickType }) => void;
+  "reaction:emit": (payload: { id: string; emoji: string; senderId?: string; senderName?: string }) => void;
   "room:kicked": () => void;
 };
 

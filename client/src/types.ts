@@ -25,11 +25,14 @@ export type Phase =
   | "guess"
   | "reveal_fake";
 
+export type TrickType = "blind" | "one_stroke" | "large_brush" | "random_brush" | "half_time" | "upside_down" | "wobble" | "mirror" | "ink_limit";
+
 export type Reveal = {
   drawingIndex: number;
   drawerId: PlayerId;
   prompt: string;
   imageDataUrl: string;
+  trick?: TrickType;
   options: Array<{
     id: string;
     text: string;
@@ -41,14 +44,13 @@ export type Reveal = {
   totalDrawings: number;
 };
 
-export type TrickType = "blind" | "one_stroke" | "large_brush" | "tiny_brush" | "half_time" | "upside_down" | "wobble" | "mirror" | "ink_limit";
-
 export type GalleryItem = {
   drawerId: PlayerId;
   drawerName: string;
   drawerColor: string;
   prompt: string;
   imageDataUrl: string;
+  trick?: TrickType;
 };
 
 export type Accolade = {
@@ -57,6 +59,38 @@ export type Accolade = {
   playerName: string;
   playerColor: string;
   description: string;
+};
+
+export type ChaosVoteDrawing = {
+  id: string;
+  drawerId: PlayerId;
+  imageDataUrl: string;
+};
+
+export type ChaosRevealDrawing = {
+  id: string;
+  drawerId: PlayerId;
+  drawerName: string;
+  drawerColor: string;
+  drawerAvatar?: string;
+  imageDataUrl: string;
+  guesses: Array<{
+    voterId: PlayerId;
+    voterName: string;
+    voterColor: string;
+    voterAvatar?: string;
+    guessedId?: PlayerId;
+    guessedName: string;
+    guessedColor: string;
+    isCorrect: boolean;
+  }>;
+};
+
+export type ChaosReveal = {
+  prompt: string;
+  drawings: ChaosRevealDrawing[];
+  pointsDeltaByPlayer: Record<PlayerId, number>;
+  totalDrawings: number;
 };
 
 export type RoomState = {
@@ -90,9 +124,16 @@ export type RoomState = {
   players: Array<{ id: PlayerId; name: string; score: number; connected: boolean; color: string; avatarUrl?: string; isBot?: boolean; isSpectator?: boolean }>;
   avatar?: { submittedBy: PlayerId[] };
   drawing?: { submittedBy: PlayerId[] };
-  submit?: { drawerId: PlayerId; imageDataUrl: string; submittedBy: PlayerId[]; drawingIndex: number; totalDrawings: number; };
-  vote?: { drawerId: PlayerId; prompt?: string; imageDataUrl: string; options: Array<{ id: string; text: string }>; votedBy: PlayerId[]; drawingIndex: number; totalDrawings: number; };
+  submit?: { drawerId: PlayerId; imageDataUrl: string; trick?: TrickType; submittedBy: PlayerId[]; drawingIndex: number; totalDrawings: number; };
+  vote?: { drawerId: PlayerId; prompt?: string; imageDataUrl: string; trick?: TrickType; options: Array<{ id: string; text: string }>; votedBy: PlayerId[]; drawingIndex: number; totalDrawings: number; };
   reveal?: Reveal;
+  chaosVote?: {
+    prompt: string;
+    drawings: ChaosVoteDrawing[];
+    votedBy: PlayerId[];
+    totalVoters: number;
+  };
+  chaosReveal?: ChaosReveal;
   gallery?: GalleryItem[];
   accolades?: Accolade[];
   fakeArtist?: {

@@ -1,10 +1,12 @@
 import React, { useMemo } from "react";
 import type { Reveal, RoomState } from "../../types";
+import { TrickBadge } from "../components/TrickBadge";
 
 export function RevealScreen(props: {
   room: RoomState;
   me: RoomState["players"][number];
-  reveal: Reveal;
+  reveal?: Reveal;
+  chaosReveal?: RoomState["chaosReveal"];
   isHost: boolean;
   onNext: () => void;
 }) {
@@ -20,13 +22,166 @@ export function RevealScreen(props: {
     return m;
   }, [props.room.players]);
 
-  const drawer = props.room.players.find(p => p.id === props.reveal.drawerId);
+  const isChaos = Boolean(props.room.finalChaosRound && props.room.round > props.room.totalRounds);
+  const sorted = [...props.room.players].sort((a, b) => b.score - a.score);
+
+  // --- Grand Chaos Reveal Screen ---
+  if (isChaos && props.room.chaosReveal) {
+    const chaos = props.room.chaosReveal;
+    return (
+      <div className="page">
+        <div className="card reveal-card">
+          <div className="row space" style={{ marginBottom: "1.5rem" }}>
+            <div>
+              <h2 style={{ margin: 0 }}>🔥 Final Chaos Round: Grand Reveal</h2>
+              <div className="muted" style={{ marginTop: "4px" }}>
+                All secret votes revealed! See who recognized each artist's masterpiece.
+              </div>
+            </div>
+            {props.isHost && !props.me.isSpectator ? (
+              <button
+                className="btn primary"
+                onClick={props.onNext}
+                style={{
+                  padding: "12px 24px",
+                  fontWeight: 800,
+                  fontSize: "1.05rem",
+                  background: "linear-gradient(135deg, #f97316, #ef4444)"
+                }}
+              >
+                Finish Game 🏆
+              </button>
+            ) : (
+              <div className="muted">Waiting for host to continue…</div>
+            )}
+          </div>
+
+          <div
+            style={{
+              padding: "12px 20px",
+              borderRadius: "14px",
+              background: "linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(239, 68, 68, 0.2))",
+              border: "1px solid rgba(249, 115, 22, 0.45)",
+              color: "#fff",
+              textAlign: "center",
+              fontSize: "1.1rem",
+              fontWeight: 700,
+              marginBottom: "1.5rem"
+            }}
+          >
+            🔥 Shared Secret Prompt: <b style={{ color: "#fef08a" }}>"{chaos.prompt}"</b>
+          </div>
+
+          <div className="reveal-content">
+            <div className="reveal-main">
+              <div className="chaos-reveal-grid">
+                {chaos.drawings.map((d, i) => (
+                  <div key={d.id} className="chaos-reveal-card scale-in">
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        {d.drawerAvatar ? (
+                          <img
+                            src={d.drawerAvatar}
+                            alt={d.drawerName}
+                            style={{ width: "36px", height: "36px", borderRadius: "50%", border: `2.5px solid ${d.drawerColor}` }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "50%",
+                              background: d.drawerColor,
+                              color: "#fff",
+                              fontSize: "1rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 900
+                            }}
+                          >
+                            {d.drawerName[0]?.toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ fontSize: "0.75rem", fontWeight: 800, color: "#fed7aa", textTransform: "uppercase" }}>
+                            Artist
+                          </div>
+                          <div style={{ fontWeight: 800, fontSize: "1.1rem", color: d.drawerColor }}>
+                            {d.drawerName}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="chaos-drawing-badge">#{i + 1}</span>
+                    </div>
+
+                    <img src={d.imageDataUrl} alt={`Art by ${d.drawerName}`} className="chaos-drawing-img" />
+
+                    <div>
+                      <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "rgba(255, 255, 255, 0.7)", marginBottom: "6px" }}>
+                        Player Guesses:
+                      </div>
+                      <div className="chaos-reveal-guesses">
+                        {d.guesses.length === 0 ? (
+                          <div className="muted small">No other players voted.</div>
+                        ) : (
+                          d.guesses.map((g) => (
+                            <div key={g.voterId} className={`chaos-guess-item ${g.isCorrect ? "correct" : "incorrect"}`}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <b style={{ color: g.voterColor }}>{g.voterName}</b>
+                                <span className="muted">guessed</span>
+                                <b style={{ color: g.guessedColor }}>{g.guessedName}</b>
+                              </div>
+                              <span style={{ fontWeight: 800, fontSize: "0.85rem", color: g.isCorrect ? "#10b981" : "#ef4444" }}>
+                                {g.isCorrect ? "✅ Correct (+1 pt)" : "❌ Wrong"}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="reveal-sidebar">
+              <h3 style={{ marginBottom: "1rem" }}>Scoreboard</h3>
+              <div className="list compact">
+                {sorted.map((p) => {
+                  const delta = chaos.pointsDeltaByPlayer[p.id] ?? 0;
+                  return (
+                    <div key={p.id} className="listItem scoreboard-item">
+                      <div className="row" style={{ gap: "8px" }}>
+                        {p.avatarUrl && <img src={p.avatarUrl} alt="av" className="avatar-tiny" style={{ border: `1px solid ${p.color}` }} />}
+                        <div className="name" style={{ color: p.color, fontSize: "0.9rem" }}>{p.name}</div>
+                      </div>
+                      <div className="scoreLine">
+                        {delta !== 0 && (
+                          <span className={delta > 0 ? "delta plus" : "delta minus"}>
+                            {delta > 0 ? `+${delta}` : delta}
+                          </span>
+                        )}
+                        <span className="score">{p.score}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Regular Drawful Reveal Screen ---
+  if (!props.reveal) return null;
+
+  const drawer = props.room.players.find((p) => p.id === props.reveal?.drawerId);
   const drawerName = drawer?.name ?? "Someone";
   const drawerAvatar = drawer?.avatarUrl;
   const drawerColor = drawer?.color ?? "#000";
-
-  const isChaos = Boolean(props.room.finalChaosRound && props.room.round > props.room.totalRounds);
-  const sorted = [...props.room.players].sort((a, b) => b.score - a.score);
 
   const isLastDrawing = props.reveal.drawingIndex >= props.reveal.totalDrawings - 1;
   const maxRounds = props.room.finalChaosRound ? props.room.totalRounds + 1 : props.room.totalRounds;
@@ -45,8 +200,8 @@ export function RevealScreen(props: {
     <div className="page">
       <div className="card reveal-card">
         <div className="row space" style={{ marginBottom: "1.5rem" }}>
-          <div className="row" style={{ gap: "12px" }}>
-            {!isChaos && drawerAvatar && (
+          <div className="row" style={{ gap: "12px", flexWrap: "wrap" }}>
+            {drawerAvatar && (
               <img
                 src={drawerAvatar}
                 alt="drawer"
@@ -55,14 +210,12 @@ export function RevealScreen(props: {
               />
             )}
             <div>
-              <h2 style={{ margin: 0 }}>{isChaos ? "🔥 Chaos Reveal" : "Reveal"}</h2>
+              <h2 style={{ margin: 0 }}>Reveal</h2>
               <div className="muted">
-                {isChaos
-                  ? `Drawing ${props.reveal.drawingIndex + 1} of ${props.reveal.totalDrawings}`
-                  : `Drawing ${props.reveal.drawingIndex + 1} of ${props.reveal.totalDrawings} by `}
-                {!isChaos && <b style={{ color: drawerColor }}>{drawerName}</b>}
+                Drawing {props.reveal.drawingIndex + 1} of {props.reveal.totalDrawings} by <b style={{ color: drawerColor }}>{drawerName}</b>
               </div>
             </div>
+            {props.reveal.trick && <TrickBadge trick={props.reveal.trick} />}
           </div>
           {props.isHost && !props.me.isSpectator ? (
             <button className="btn primary" onClick={props.onNext}>
@@ -77,72 +230,13 @@ export function RevealScreen(props: {
           <div className="reveal-main">
             <img className="img reveal-img" src={props.reveal.imageDataUrl} alt="drawing" />
 
-            {isChaos ? (
-              <div
-                className="scale-in"
-                style={{
-                  margin: "1.2rem 0",
-                  padding: "16px 22px",
-                  borderRadius: "20px",
-                  background: "linear-gradient(135deg, rgba(249, 115, 22, 0.25), rgba(239, 68, 68, 0.25))",
-                  border: "2px solid rgba(249, 115, 22, 0.55)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "16px",
-                  boxShadow: "0 8px 25px rgba(249, 115, 22, 0.25)"
-                }}
-              >
-                {drawer?.avatarUrl ? (
-                  <img
-                    src={drawer.avatarUrl}
-                    alt={drawer.name}
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      borderRadius: "50%",
-                      border: `3px solid ${drawer.color}`,
-                      objectFit: "cover"
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      borderRadius: "50%",
-                      background: drawer?.color ?? "#f97316",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "1.6rem",
-                      fontWeight: 900,
-                      color: "#fff"
-                    }}
-                  >
-                    {drawer?.name?.[0]?.toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <div style={{ fontSize: "0.85rem", fontWeight: 800, color: "#fed7aa", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                    🔥 The Artist Was
-                  </div>
-                  <div style={{ fontSize: "1.4rem", fontWeight: 900, color: drawer?.color }}>
-                    {drawer?.name}
-                  </div>
-                  <div style={{ fontSize: "0.85rem", color: "rgba(255, 255, 255, 0.8)", marginTop: "2px" }}>
-                    Prompt: <b style={{ color: "#fef08a" }}>"{props.reveal.prompt}"</b>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="prompt reveal-prompt">
-                <div className="muted">The real prompt was</div>
-                <div className="promptText">{props.reveal.prompt}</div>
-              </div>
-            )}
+            <div className="prompt reveal-prompt">
+              <div className="muted">The real prompt was</div>
+              <div className="promptText">{props.reveal.prompt}</div>
+            </div>
 
             <div className="votes-section">
-              <h3 style={{ marginBottom: "1rem" }}>{isChaos ? "Player Guesses & Scoring" : "Votes & Comedy Awards"}</h3>
+              <h3 style={{ marginBottom: "1rem" }}>Votes & Comedy Awards</h3>
               <div className="list" style={props.reveal.options.length > 4 ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" } : undefined}>
                 {props.reveal.options.map((o) => {
                   const authorId = o.authorId;
@@ -158,13 +252,13 @@ export function RevealScreen(props: {
                         <div className="name">
                           {o.text}
                           {isReal ? (
-                            <span className="tag real">{isChaos ? "ARTIST (CORRECT! +3 pts)" : "CORRECT"}</span>
+                            <span className="tag real">CORRECT</span>
                           ) : (
                             <span className="tag fake" style={{ backgroundColor: authorColor + '22', color: authorColor }}>
-                              {isChaos ? `fooled (+1 pt bluff to ${o.text})` : `fake by ${authorName}`}
+                              fake by {authorName}
                             </span>
                           )}
-                          {!isChaos && o.likes && o.likes.length > 0 && (
+                          {o.likes && o.likes.length > 0 && (
                             <span
                               style={{
                                 marginLeft: "8px",
@@ -183,10 +277,10 @@ export function RevealScreen(props: {
                         </div>
                         {o.votes.length > 0 && (
                           <div className="muted small" style={{ marginTop: "4px" }}>
-                            <b>{isChaos ? "Guessed by:" : "Voters:"}</b> {voters}
+                            <b>Voters:</b> {voters}
                           </div>
                         )}
-                        {!isChaos && o.likes && o.likes.length > 0 && (
+                        {o.likes && o.likes.length > 0 && (
                           <div className="muted small" style={{ marginTop: "2px", color: "#f87171" }}>
                             <b>😂 Liked by:</b> {likers}
                           </div>
@@ -204,7 +298,7 @@ export function RevealScreen(props: {
             <h3 style={{ marginBottom: "1rem" }}>Scoreboard</h3>
             <div className="list compact">
               {sorted.map((p) => {
-                const delta = props.reveal.pointsDeltaByPlayer[p.id] ?? 0;
+                const delta = props.reveal?.pointsDeltaByPlayer[p.id] ?? 0;
                 return (
                   <div key={p.id} className="listItem scoreboard-item">
                     <div className="row" style={{ gap: "8px" }}>
@@ -229,3 +323,4 @@ export function RevealScreen(props: {
     </div>
   );
 }
+

@@ -13,14 +13,17 @@ import {
   allCluesSubmitted,
   allDrawingsSubmitted,
   allVotesCast,
+  allChaosVotesCast,
   beginClueSubmit,
   beginVote,
   castVote,
+  castChaosVote,
   createRoom,
   getRoom,
   listPlayers,
   maybeReassignHost,
   scoreAndReveal,
+  scoreAndRevealChaos,
   setConnected,
   startGame,
   submitClue,
@@ -233,19 +236,39 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
         }
         emitRoom(r.roomCode);
       } else if (r.phase === "vote") {
-        if (r.voteByVoterId.has(bot.id)) return;
-        const cur = r.drawings[r.drawingIndex];
-        if (cur?.drawerId === bot.id) return;
-        const opts = r.options.filter(o => o.authorId !== bot.id);
-        const choice = opts[Math.floor(Math.random() * opts.length)];
-        if (choice) {
-          castVote(r, bot.id, choice.id);
-          if (allVotesCast(r)) {
-            scoreAndReveal(r);
+        const isChaosRound = Boolean(r.finalChaosRound && r.round > r.totalRounds);
+        if (isChaosRound) {
+          if (r.chaosVotesByVoterId.has(bot.id)) return;
+          const eligibleTargets = listPlayers(r).filter((p) => !p.isSpectator);
+          const votes: Record<string, string> = {};
+          for (const d of r.chaosDrawings) {
+            if (d.drawerId === bot.id) continue;
+            const otherTargets = eligibleTargets.filter((p) => p.id !== bot.id);
+            const pick = otherTargets[Math.floor(Math.random() * otherTargets.length)] || eligibleTargets[0];
+            if (pick) votes[d.id] = pick.id;
+          }
+          castChaosVote(r, bot.id, votes);
+          if (allChaosVotesCast(r)) {
+            scoreAndRevealChaos(r);
             setupPhaseTimer(r);
             triggerBotActions(r);
           }
           emitRoom(r.roomCode);
+        } else {
+          if (r.voteByVoterId.has(bot.id)) return;
+          const cur = r.drawings[r.drawingIndex];
+          if (cur?.drawerId === bot.id) return;
+          const opts = r.options.filter(o => o.authorId !== bot.id);
+          const choice = opts[Math.floor(Math.random() * opts.length)];
+          if (choice) {
+            castVote(r, bot.id, choice.id);
+            if (allVotesCast(r)) {
+              scoreAndReveal(r);
+              setupPhaseTimer(r);
+              triggerBotActions(r);
+            }
+            emitRoom(r.roomCode);
+          }
         }
         emitRoom(r.roomCode);
       } else if (r.phase === "category") {
@@ -375,7 +398,12 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
     } else if (room.phase === "submit") {
       beginVote(room);
     } else if (room.phase === "vote") {
-      scoreAndReveal(room);
+      const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
+      if (isChaos) {
+        scoreAndRevealChaos(room);
+      } else {
+        scoreAndReveal(room);
+      }
     } else if (room.phase === "category") {
       // Auto-submit some category if QM is AFK
       room.category = "Random";
@@ -775,6 +803,26 @@ io.on("connection", (socket) => {
 
       if (allVotesCast(room)) {
         scoreAndReveal(room);
+        setupPhaseTimer(room);
+        triggerBotActions(room);
+      }
+      emitRoom(room.roomCode);
+    }
+  );
+
+  socket.on(
+    "vote:chaos",
+    ({ roomCode, playerId, votes }: { roomCode: string; playerId: string; votes: Record<string, string> }, ack?: (resp: any) => void) => {
+      const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
+      if (!room) return ack?.({ ok: false, error: "Room not found" });
+      if (room.phase !== "vote") return ack?.({ ok: false, error: "Not in vote phase" });
+      if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot vote." });
+
+      castChaosVote(room, playerId, votes || {});
+      ack?.({ ok: true });
+
+      if (allChaosVotesCast(room)) {
+        scoreAndRevealChaos(room);
         setupPhaseTimer(room);
         triggerBotActions(room);
       }

@@ -299,23 +299,26 @@ export function App() {
         );
 
       case "vote":
-        if (!room.vote) return <LoadingCard message="Preparing voting options…" />;
+        if (!room.vote && !room.chaosVote) return <LoadingCard message="Preparing voting options…" />;
         return (
           <VoteScreen
             room={room}
             me={me}
             vote={room.vote}
+            chaosVote={room.chaosVote}
             onVote={(optionId, likedOptionIds) => socket.emit("vote:cast", { roomCode: room.roomCode, playerId, optionId, likedOptionIds })}
+            onChaosVote={(votes) => socket.emit("vote:chaos", { roomCode: room.roomCode, playerId, votes })}
           />
         );
 
       case "reveal":
-        if (!room.reveal) return <LoadingCard message="Getting the results…" />;
+        if (!room.reveal && !room.chaosReveal) return <LoadingCard message="Getting the results…" />;
         return (
           <RevealScreen
             room={room}
             me={me}
             reveal={room.reveal}
+            chaosReveal={room.chaosReveal}
             isHost={isHost}
             onNext={() => socket.emit("reveal:next", { roomCode: room.roomCode, playerId })}
           />

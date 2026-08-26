@@ -87,6 +87,10 @@ type Room = {
   reveal?: Reveal;
   usedPrompts: Set<string>;
 
+  chaosDrawings: Array<{ id: string; drawerId: PlayerId; imageDataUrl: string; prompt: string; trick?: import("./gameTypes.js").TrickType }>;
+  chaosVotesByVoterId: Map<PlayerId, Record<string, PlayerId>>;
+  chaosReveal?: import("./gameTypes.js").ChaosReveal;
+
   allDrawingsHistory: import("./gameTypes.js").GalleryItem[];
   fakeVotesTricked: Map<PlayerId, number>;
   correctPromptsGuessed: Map<PlayerId, number>;
@@ -153,6 +157,8 @@ export function createRoom(host: Player): Room {
     voteByVoterId: new Map(),
     likedOptionIdsByVoterId: new Map(),
     comedyLikesReceived: new Map(),
+    chaosDrawings: [],
+    chaosVotesByVoterId: new Map(),
     votedForId: new Map(),
     usedPrompts: new Set(),
     allDrawingsHistory: [],
@@ -237,33 +243,54 @@ export function toPublicState(room: Room): RoomStatePublic {
     };
   }
 
+  const isChaosRound = Boolean(room.finalChaosRound && room.round > room.totalRounds);
+
   if (room.phase === "submit" && currentDrawing) {
     base.submit = {
       drawerId: currentDrawing.drawerId,
       imageDataUrl: currentDrawing.imageDataUrl || "",
+      trick: currentDrawing.trick,
       submittedBy: [...room.clueByPlayerId.keys()],
       drawingIndex: room.drawingIndex,
       totalDrawings: room.drawings.length
     };
   }
 
-  if (room.phase === "vote" && currentDrawing) {
-    base.vote = {
-      drawerId: currentDrawing.drawerId,
-      prompt: currentDrawing.prompt,
-      imageDataUrl: currentDrawing.imageDataUrl || "",
-      options: room.options.map((o) => ({ id: o.id, text: o.text })),
-      votedBy: [...room.voteByVoterId.keys()],
-      drawingIndex: room.drawingIndex,
-      totalDrawings: room.drawings.length
-    };
+  if (room.phase === "vote") {
+    if (isChaosRound) {
+      base.chaosVote = {
+        prompt: room.chaosDrawings[0]?.prompt || "Secret Prompt",
+        drawings: room.chaosDrawings.map((d) => ({
+          id: d.id,
+          drawerId: d.drawerId,
+          imageDataUrl: d.imageDataUrl
+        })),
+        votedBy: [...room.chaosVotesByVoterId.keys()],
+        totalVoters: listPlayers(room).filter((p) => !p.isSpectator).length
+      };
+    } else if (currentDrawing) {
+      base.vote = {
+        drawerId: currentDrawing.drawerId,
+        prompt: currentDrawing.prompt,
+        imageDataUrl: currentDrawing.imageDataUrl || "",
+        trick: currentDrawing.trick,
+        options: room.options.map((o) => ({ id: o.id, text: o.text })),
+        votedBy: [...room.voteByVoterId.keys()],
+        drawingIndex: room.drawingIndex,
+        totalDrawings: room.drawings.length
+      };
+    }
   }
 
-  if (room.phase === "reveal" && room.reveal) {
-    base.reveal = {
-      ...room.reveal,
-      totalDrawings: room.drawings.length
-    };
+  if (room.phase === "reveal") {
+    if (isChaosRound && room.chaosReveal) {
+      base.chaosReveal = room.chaosReveal;
+    } else if (room.reveal) {
+      base.reveal = {
+        ...room.reveal,
+        totalDrawings: room.drawings.length
+      };
+    }
   }
 
   if (room.phase === "game_over") {
@@ -643,7 +670,7 @@ export function startRound(room: Room) {
     promptByPlayer.set(pid, isChaosRound ? sharedChaosPrompt : prompts[idx]!);
   });
 
-  const tricks: Array<import("./gameTypes.js").TrickType> = ["blind", "one_stroke", "large_brush", "tiny_brush", "half_time", "upside_down", "wobble", "mirror", "ink_limit"];
+  const tricks: Array<import("./gameTypes.js").TrickType> = ["blind", "one_stroke", "large_brush", "random_brush", "half_time", "upside_down", "wobble", "mirror", "ink_limit"];
   const sharedTrick = tricks[Math.floor(Math.random() * tricks.length)];
 
   room.drawings = order.map((drawerId) => {
@@ -665,6 +692,9 @@ export function startRound(room: Room) {
   room.voteByVoterId.clear();
   room.likedOptionIdsByVoterId.clear();
   room.reveal = undefined;
+  room.chaosDrawings = [];
+  room.chaosVotesByVoterId.clear();
+  room.chaosReveal = undefined;
   room.phase = "draw";
 }
 
@@ -681,7 +711,7 @@ export function allDrawingsSubmitted(room: Room): boolean {
 export function advanceAfterDraw(room: Room) {
   const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
   if (isChaos) {
-    beginVote(room);
+    beginChaosVote(room);
   } else {
     beginClueSubmit(room);
   }
@@ -716,37 +746,125 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+export function beginChaosVote(room: Room) {
+  const activeDrawings = room.drawings.filter((d) => Boolean(d.imageDataUrl));
+  const shuffled = shuffle(activeDrawings);
+  room.chaosDrawings = shuffled.map((d, idx) => ({
+    id: `chaos_${idx}_${d.drawerId}`,
+    drawerId: d.drawerId,
+    imageDataUrl: d.imageDataUrl || "",
+    prompt: d.prompt,
+    trick: d.trick
+  }));
+  room.chaosVotesByVoterId.clear();
+  room.chaosReveal = undefined;
+  room.phase = "vote";
+}
+
+export function castChaosVote(room: Room, voterId: PlayerId, votes: Record<string, string>) {
+  room.chaosVotesByVoterId.set(voterId, votes);
+}
+
+export function allChaosVotesCast(room: Room): boolean {
+  const voters = listPlayers(room).filter((p) => !p.isSpectator);
+  return voters.length > 0 && voters.every((p) => room.chaosVotesByVoterId.has(p.id));
+}
+
+export function scoreAndRevealChaos(room: Room) {
+  const activePlayers = listPlayers(room).filter((p) => !p.isSpectator);
+  const pointsDeltaByPlayer: Record<PlayerId, number> = {};
+  for (const p of listPlayers(room)) pointsDeltaByPlayer[p.id] = 0;
+
+  const sharedPrompt = room.chaosDrawings[0]?.prompt || "Chaos Prompt";
+
+  // Score 1 point per correct guess (maximum N-1 points per player)
+  for (const drawing of room.chaosDrawings) {
+    for (const voter of activePlayers) {
+      if (voter.id === drawing.drawerId) continue;
+      const guessedId = room.chaosVotesByVoterId.get(voter.id)?.[drawing.id];
+      if (guessedId === drawing.drawerId) {
+        pointsDeltaByPlayer[voter.id] = (pointsDeltaByPlayer[voter.id] || 0) + 1;
+        room.correctPromptsGuessed.set(voter.id, (room.correctPromptsGuessed.get(voter.id) || 0) + 1);
+      }
+    }
+  }
+
+  // Apply score deltas
+  for (const [pid, delta] of Object.entries(pointsDeltaByPlayer)) {
+    const p = room.playersById.get(pid);
+    if (p) p.score += delta;
+  }
+
+  // Build chaos reveal structure
+  const chaosRevealDrawings = room.chaosDrawings.map((drawing) => {
+    const drawer = room.playersById.get(drawing.drawerId);
+    const guesses = activePlayers
+      .filter((voter) => voter.id !== drawing.drawerId)
+      .map((voter) => {
+        const guessedId = room.chaosVotesByVoterId.get(voter.id)?.[drawing.id];
+        const guessedPlayer = guessedId ? room.playersById.get(guessedId) : undefined;
+        return {
+          voterId: voter.id,
+          voterName: voter.name,
+          voterColor: voter.color,
+          voterAvatar: voter.avatarUrl,
+          guessedId,
+          guessedName: guessedPlayer?.name || "No Guess",
+          guessedColor: guessedPlayer?.color || "#94a3b8",
+          isCorrect: guessedId === drawing.drawerId
+        };
+      });
+
+    return {
+      id: drawing.id,
+      drawerId: drawing.drawerId,
+      drawerName: drawer?.name || "Unknown",
+      drawerColor: drawer?.color || "#ffffff",
+      drawerAvatar: drawer?.avatarUrl,
+      imageDataUrl: drawing.imageDataUrl,
+      guesses
+    };
+  });
+
+  // Record drawings into gallery history
+  for (const d of room.chaosDrawings) {
+    const drawer = room.playersById.get(d.drawerId);
+    room.allDrawingsHistory.push({
+      drawerId: d.drawerId,
+      drawerName: drawer?.name || "Unknown",
+      drawerColor: drawer?.color || "#ffffff",
+      prompt: d.prompt,
+      imageDataUrl: d.imageDataUrl,
+      trick: d.trick
+    });
+  }
+
+  room.chaosReveal = {
+    prompt: sharedPrompt,
+    drawings: chaosRevealDrawings,
+    pointsDeltaByPlayer,
+    totalDrawings: room.chaosDrawings.length
+  };
+  room.phase = "reveal";
+}
+
 export function beginVote(room: Room) {
   const cur = room.drawings[room.drawingIndex];
   if (!cur?.imageDataUrl) return;
 
-  const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
   const options: Option[] = [];
+  options.push({ id: nanoid(10), text: cur.prompt, authorId: null });
+  for (const [authorId, text] of room.clueByPlayerId.entries()) {
+    if (authorId === cur.drawerId) continue;
+    options.push({ id: nanoid(10), text, authorId });
+  }
 
-  if (isChaos) {
-    // In Chaos Round: everyone drew the same prompt, so players vote on WHO drew this masterpiece!
-    const activePlayers = listPlayers(room).filter((p) => !p.isSpectator);
-    for (const p of activePlayers) {
-      options.push({
-        id: p.id,
-        text: p.name,
-        authorId: p.id === cur.drawerId ? null : p.id
-      });
-    }
-  } else {
-    options.push({ id: nanoid(10), text: cur.prompt, authorId: null });
-    for (const [authorId, text] of room.clueByPlayerId.entries()) {
-      if (authorId === cur.drawerId) continue;
-      options.push({ id: nanoid(10), text, authorId });
-    }
+  if (room.useExtraPrompt) {
+    const activePrompts = new Set(room.drawings.map((d) => d.prompt));
+    for (const opt of options) activePrompts.add(opt.text);
 
-    if (room.useExtraPrompt) {
-      const activePrompts = new Set(room.drawings.map((d) => d.prompt));
-      for (const opt of options) activePrompts.add(opt.text);
-
-      const extraPrompt = generateSmartDecoyPrompt(cur.prompt, activePrompts, room.usedPrompts);
-      options.push({ id: nanoid(10), text: extraPrompt, authorId: "system" });
-    }
+    const extraPrompt = generateSmartDecoyPrompt(cur.prompt, activePrompts, room.usedPrompts);
+    options.push({ id: nanoid(10), text: extraPrompt, authorId: "system" });
   }
 
   room.options = shuffle(options);
@@ -777,66 +895,40 @@ export function scoreAndReveal(room: Room) {
   const realOption = room.options.find((o) => o.authorId === null);
   if (!realOption) return;
 
-  const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
   const voters = listPlayers(room).filter((p) => p.id !== drawerId && !p.isSpectator);
   const correctVoters = voters.filter((v) => room.voteByVoterId.get(v.id) === realOption.id);
 
   const pointsDeltaByPlayer: Record<PlayerId, number> = {};
   for (const p of listPlayers(room)) pointsDeltaByPlayer[p.id] = 0;
 
-  if (isChaos) {
-    // Chaos Round scoring: Guessing the artist correctly
+  // Dixit scoring for normal Drawful
+  const allCorrect = correctVoters.length === voters.length && voters.length > 0;
+  const noneCorrect = correctVoters.length === 0;
+  if (allCorrect || noneCorrect) {
+    pointsDeltaByPlayer[drawerId] += 0;
+    for (const v of voters) pointsDeltaByPlayer[v.id] += 2;
+  } else {
+    pointsDeltaByPlayer[drawerId] += 3;
+    for (const v of correctVoters) pointsDeltaByPlayer[v.id] += 3;
+  }
+
+  if (correctVoters.length > 0) {
+    room.artistRealVotes.set(drawerId, (room.artistRealVotes.get(drawerId) || 0) + correctVoters.length);
     for (const v of correctVoters) {
-      pointsDeltaByPlayer[v.id] += 3;
       room.correctPromptsGuessed.set(v.id, (room.correctPromptsGuessed.get(v.id) || 0) + 1);
     }
-    // Drawer gets +2 pts per player who recognized their art
-    pointsDeltaByPlayer[drawerId] += correctVoters.length * 2;
-    if (correctVoters.length > 0) {
-      room.artistRealVotes.set(drawerId, (room.artistRealVotes.get(drawerId) || 0) + correctVoters.length);
-    }
+  }
 
-    // Fooled votes: if you voted for someone else, they get +1 bluff pt
-    for (const v of voters) {
-      const chosen = room.voteByVoterId.get(v.id);
-      if (!chosen || chosen === realOption.id) continue;
-      const opt = room.options.find((o) => o.id === chosen);
-      if (opt?.authorId && opt.authorId !== drawerId) {
-        pointsDeltaByPlayer[opt.authorId] += 1;
-        room.fakeVotesTricked.set(opt.authorId, (room.fakeVotesTricked.get(opt.authorId) || 0) + 1);
-        room.fakePromptsFooledBy.set(v.id, (room.fakePromptsFooledBy.get(v.id) || 0) + 1);
-      }
-    }
-  } else {
-    // Dixit scoring for normal Drawful
-    const allCorrect = correctVoters.length === voters.length && voters.length > 0;
-    const noneCorrect = correctVoters.length === 0;
-    if (allCorrect || noneCorrect) {
-      pointsDeltaByPlayer[drawerId] += 0;
-      for (const v of voters) pointsDeltaByPlayer[v.id] += 2;
-    } else {
-      pointsDeltaByPlayer[drawerId] += 3;
-      for (const v of correctVoters) pointsDeltaByPlayer[v.id] += 3;
-    }
-
-    if (correctVoters.length > 0) {
-      room.artistRealVotes.set(drawerId, (room.artistRealVotes.get(drawerId) || 0) + correctVoters.length);
-      for (const v of correctVoters) {
-        room.correctPromptsGuessed.set(v.id, (room.correctPromptsGuessed.get(v.id) || 0) + 1);
-      }
-    }
-
-    // +1 per vote your fake clue receives
-    for (const v of voters) {
-      const chosen = room.voteByVoterId.get(v.id);
-      if (!chosen) continue;
-      const opt = room.options.find((o) => o.id === chosen);
-      if (!opt) continue;
-      if (opt.authorId && opt.authorId !== drawerId) {
-        pointsDeltaByPlayer[opt.authorId] += 1;
-        room.fakeVotesTricked.set(opt.authorId, (room.fakeVotesTricked.get(opt.authorId) || 0) + 1);
-        room.fakePromptsFooledBy.set(v.id, (room.fakePromptsFooledBy.get(v.id) || 0) + 1);
-      }
+  // +1 per vote your fake clue receives
+  for (const v of voters) {
+    const chosen = room.voteByVoterId.get(v.id);
+    if (!chosen) continue;
+    const opt = room.options.find((o) => o.id === chosen);
+    if (!opt) continue;
+    if (opt.authorId && opt.authorId !== drawerId) {
+      pointsDeltaByPlayer[opt.authorId] += 1;
+      room.fakeVotesTricked.set(opt.authorId, (room.fakeVotesTricked.get(opt.authorId) || 0) + 1);
+      room.fakePromptsFooledBy.set(v.id, (room.fakePromptsFooledBy.get(v.id) || 0) + 1);
     }
   }
 
@@ -887,7 +979,8 @@ export function scoreAndReveal(room: Room) {
     drawerName: drawerPlayer?.name ?? "Unknown",
     drawerColor: drawerPlayer?.color ?? "#ffffff",
     prompt: cur.prompt,
-    imageDataUrl: cur.imageDataUrl
+    imageDataUrl: cur.imageDataUrl,
+    trick: cur.trick
   });
 
   room.reveal = {
@@ -895,6 +988,7 @@ export function scoreAndReveal(room: Room) {
     drawerId,
     prompt: cur.prompt,
     imageDataUrl: cur.imageDataUrl,
+    trick: cur.trick,
     options: optionVotes,
     pointsDeltaByPlayer,
     totalDrawings: room.drawings.length
@@ -910,6 +1004,12 @@ export function advance(room: Room) {
     } else {
       room.phase = "game_over";
     }
+    return;
+  }
+
+  const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
+  if (isChaos) {
+    room.phase = "game_over";
     return;
   }
 
@@ -929,11 +1029,6 @@ export function advance(room: Room) {
       room.phase = "game_over";
     }
   } else {
-    const isChaos = Boolean(room.finalChaosRound && room.round > room.totalRounds);
-    if (isChaos) {
-      beginVote(room);
-    } else {
-      room.phase = "submit";
-    }
+    room.phase = "submit";
   }
 }

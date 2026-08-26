@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import type { RoomState } from "../../types";
 import confetti from "canvas-confetti";
 import { downloadImageDataUrl } from "../downloadImage";
+import { TrickBadge } from "../components/TrickBadge";
 
 export function GameOverScreen(props: {
   room: RoomState;
@@ -175,10 +176,13 @@ export function GameOverScreen(props: {
                       border: `3px solid ${g.drawerColor}`
                     }}
                   />
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                     <div>
-                      <div style={{ fontWeight: 800, color: g.drawerColor, fontSize: "0.95rem" }}>{g.drawerName}</div>
-                      <div className="muted small" style={{ fontStyle: "italic" }}>"{g.prompt}"</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 800, color: g.drawerColor, fontSize: "0.95rem" }}>{g.drawerName}</span>
+                        {g.trick && <TrickBadge trick={g.trick} />}
+                      </div>
+                      <div className="muted small" style={{ fontStyle: "italic", marginTop: "2px" }}>"{g.prompt}"</div>
                     </div>
                     <button
                       className="btn"

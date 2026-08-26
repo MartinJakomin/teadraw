@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import type { RoomState } from "../../types";
 import { PlayerOrderStrip } from "../components/PlayerOrderStrip";
+import { TrickBadge } from "../components/TrickBadge";
 
 function drawfulClueParticipants(room: RoomState, drawerId: string) {
   return room.players.filter((p) => p.id !== drawerId && !p.isSpectator).length;
@@ -61,13 +62,16 @@ export function SubmitScreen(props: {
           </div>
         </div>
 
-        <div className="drawer-info" style={{ display: "flex", alignItems: "center", gap: "12px", margin: "1.2rem 0" }}>
-          {drawer?.avatarUrl && (
-            <img src={drawer.avatarUrl} alt="drawer" className="avatar-small" style={{ border: `2px solid ${drawer.color}` }} />
-          )}
-          <div className="muted">
-            Drawing by <b style={{ color: drawer?.color }}>{drawerName}</b>
+        <div className="drawer-info" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "1.2rem 0", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {drawer?.avatarUrl && (
+              <img src={drawer.avatarUrl} alt="drawer" className="avatar-small" style={{ border: `2px solid ${drawer.color}` }} />
+            )}
+            <div className="muted">
+              Drawing by <b style={{ color: drawer?.color }}>{drawerName}</b>
+            </div>
           </div>
+          {props.submit.trick && <TrickBadge trick={props.submit.trick} />}
         </div>
 
         <img className="img" src={props.submit.imageDataUrl} alt="drawing" />
