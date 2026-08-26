@@ -351,7 +351,7 @@ export function LobbyScreen(props: {
                       />
                     </div>
                     <div className="setting-row">
-                      <label>Random Trick Mode ⚡:</label>
+                      <label>Drawful Trick Mode ⚡:</label>
                       <input
                         type="checkbox"
                         disabled={!props.isHost}
@@ -360,17 +360,62 @@ export function LobbyScreen(props: {
                       />
                     </div>
                     {room.useRandomTricks && (
-                      <div className="setting-row" style={{ paddingLeft: "1.2rem" }}>
-                        <label>Trick Assignment:</label>
-                        <select
-                          disabled={!props.isHost}
-                          value={room.sameTrickForAll ? "same" : "random"}
-                          onChange={(e) => props.onUpdateSettings({ sameTrickForAll: e.target.value === "same" })}
-                        >
-                          <option value="random">Random Per Player</option>
-                          <option value="same">All Players Same Trick</option>
-                        </select>
-                      </div>
+                      <>
+                        <div className="setting-row" style={{ paddingLeft: "1.2rem" }}>
+                          <label>Trick Assignment:</label>
+                          <select
+                            disabled={!props.isHost}
+                            value={
+                              room.selectedTrick && room.selectedTrick !== "random"
+                                ? "specific"
+                                : (room.sameTrickForAll ? "same" : "random")
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "random") {
+                                props.onUpdateSettings({ sameTrickForAll: false, selectedTrick: "random" });
+                              } else if (val === "same") {
+                                props.onUpdateSettings({ sameTrickForAll: true, selectedTrick: "random" });
+                              } else if (val === "specific") {
+                                const current = room.selectedTrick && room.selectedTrick !== "random" ? room.selectedTrick : "blind";
+                                props.onUpdateSettings({ sameTrickForAll: true, selectedTrick: current });
+                              }
+                            }}
+                          >
+                            <option value="random">🎲 Random Per Player</option>
+                            <option value="same">⚡ All Players Same (Random Trick)</option>
+                            <option value="specific">🎯 Specific Trick (Choose Trick)</option>
+                          </select>
+                        </div>
+                        {room.selectedTrick && room.selectedTrick !== "random" && (
+                          <div className="setting-row" style={{ paddingLeft: "1.2rem" }}>
+                            <label>Choose Trick:</label>
+                            <select
+                              disabled={!props.isHost}
+                              value={room.selectedTrick}
+                              onChange={(e) => props.onUpdateSettings({ selectedTrick: e.target.value as any })}
+                            >
+                              <option value="blind">🙈 Blind Drawing</option>
+                              <option value="one_stroke">✏️ One Stroke Only</option>
+                              <option value="large_brush">🖌️ Mega Brush (35px)</option>
+                              <option value="random_brush">🎲 Brush Roulette (Dynamic Sizes)</option>
+                              <option value="half_time">⚡ Speed Rush (20s)</option>
+                              <option value="upside_down">🙃 Inverted Controls</option>
+                              <option value="wobble">〰️ Earthquake Wobble</option>
+                              <option value="mirror">🪞 Mirror Symmetry</option>
+                              <option value="ink_limit">🖋️ Ink Budget (2,000px)</option>
+                              <option value="zoom_lens">🔍 Magnifying Lens (3x Zoom)</option>
+                              <option value="rubberband">🪀 Slingshot Brush (Spring Physics)</option>
+                              <option value="input_delay">⏱️ 1-Second Input Lag (Delayed)</option>
+                              <option value="spinning">🎠 Spinning Canvas (Continuous 360°)</option>
+                              <option value="glitch">👾 Glitch Teleport (Jitter Jumps)</option>
+                              <option value="gravity_drip">💧 Gravity Drip (Melting Paint)</option>
+                              <option value="pixel_art">🧱 8-Bit Pixel Block (Chunky Grid)</option>
+                              <option value="bubbles">🫧 Bubble Stamping (Cluster Bubbles)</option>
+                            </select>
+                          </div>
+                        )}
+                      </>
                     )}
                   </>
                 )}

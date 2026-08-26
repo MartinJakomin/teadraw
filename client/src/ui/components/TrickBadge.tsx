@@ -22,6 +22,22 @@ export function getTrickDetails(trick?: TrickType) {
       return { icon: "🪞", title: "Mirror Symmetry", bg: "rgba(6, 182, 212, 0.2)", border: "rgba(6, 182, 212, 0.45)", color: "#22d3ee" };
     case "ink_limit":
       return { icon: "🖋️", title: "Ink Budget", bg: "rgba(168, 85, 247, 0.2)", border: "rgba(168, 85, 247, 0.45)", color: "#c084fc" };
+    case "zoom_lens":
+      return { icon: "🔍", title: "Magnifying Lens", bg: "rgba(56, 189, 248, 0.2)", border: "rgba(56, 189, 248, 0.45)", color: "#38bdf8" };
+    case "rubberband":
+      return { icon: "🪀", title: "Slingshot Brush", bg: "rgba(236, 72, 153, 0.2)", border: "rgba(236, 72, 153, 0.45)", color: "#f472b6" };
+    case "input_delay":
+      return { icon: "⏱️", title: "1s Input Lag", bg: "rgba(249, 115, 22, 0.2)", border: "rgba(249, 115, 22, 0.45)", color: "#fb923c" };
+    case "spinning":
+      return { icon: "🎠", title: "Spinning Canvas", bg: "rgba(168, 85, 247, 0.2)", border: "rgba(168, 85, 247, 0.45)", color: "#d8b4fe" };
+    case "glitch":
+      return { icon: "👾", title: "Glitch Teleport", bg: "rgba(6, 182, 212, 0.2)", border: "rgba(6, 182, 212, 0.45)", color: "#22d3ee" };
+    case "gravity_drip":
+      return { icon: "💧", title: "Gravity Drip", bg: "rgba(59, 130, 246, 0.2)", border: "rgba(59, 130, 246, 0.45)", color: "#60a5fa" };
+    case "pixel_art":
+      return { icon: "🧱", title: "8-Bit Pixel Block", bg: "rgba(234, 179, 8, 0.2)", border: "rgba(234, 179, 8, 0.45)", color: "#facc15" };
+    case "bubbles":
+      return { icon: "🫧", title: "Bubble Stamping", bg: "rgba(20, 184, 166, 0.2)", border: "rgba(20, 184, 166, 0.45)", color: "#2dd4bf" };
     default:
       return null;
   }

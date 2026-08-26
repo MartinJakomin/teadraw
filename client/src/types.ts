@@ -25,7 +25,24 @@ export type Phase =
   | "guess"
   | "reveal_fake";
 
-export type TrickType = "blind" | "one_stroke" | "large_brush" | "random_brush" | "half_time" | "upside_down" | "wobble" | "mirror" | "ink_limit";
+export type TrickType =
+  | "blind"
+  | "one_stroke"
+  | "large_brush"
+  | "random_brush"
+  | "half_time"
+  | "upside_down"
+  | "wobble"
+  | "mirror"
+  | "ink_limit"
+  | "zoom_lens"
+  | "rubberband"
+  | "input_delay"
+  | "spinning"
+  | "glitch"
+  | "gravity_drip"
+  | "pixel_art"
+  | "bubbles";
 
 export type Reveal = {
   drawingIndex: number;
@@ -107,6 +124,7 @@ export type RoomState = {
   useExtraPrompt: boolean;
   useRandomTricks?: boolean;
   sameTrickForAll?: boolean;
+  selectedTrick?: TrickType | "random";
   finalChaosRound?: boolean;
   fakeArtistInkLimit?: boolean;
   fakeArtistInkBudget?: number;

@@ -628,6 +628,7 @@ io.on("connection", (socket) => {
       useExtraPrompt: room.useExtraPrompt,
       useRandomTricks: room.useRandomTricks,
       sameTrickForAll: room.sameTrickForAll,
+      selectedTrick: room.selectedTrick,
       finalChaosRound: room.finalChaosRound,
       fakeArtistInkLimit: room.fakeArtistInkLimit,
       fakeArtistInkBudget: room.fakeArtistInkBudget,
@@ -658,7 +659,7 @@ io.on("connection", (socket) => {
   socket.on(
     "room:updateSettings",
     (
-      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, drawTimerSeconds, submitTimerSeconds, voteTimerSeconds, useExtraPrompt, useRandomTricks, sameTrickForAll, finalChaosRound, fakeArtistInkLimit, fakeArtistInkBudget, fakeArtistWordPack, lockColors, fakeArtistHighlight, fakeArtistRandomizeOrder, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; useExtraPrompt?: boolean; useRandomTricks?: boolean; sameTrickForAll?: boolean; finalChaosRound?: boolean; fakeArtistInkLimit?: boolean; fakeArtistInkBudget?: number; fakeArtistWordPack?: string; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean; botCount?: number },
+      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, drawTimerSeconds, submitTimerSeconds, voteTimerSeconds, useExtraPrompt, useRandomTricks, sameTrickForAll, selectedTrick, finalChaosRound, fakeArtistInkLimit, fakeArtistInkBudget, fakeArtistWordPack, lockColors, fakeArtistHighlight, fakeArtistRandomizeOrder, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; useExtraPrompt?: boolean; useRandomTricks?: boolean; sameTrickForAll?: boolean; selectedTrick?: import("./gameTypes.js").TrickType | "random"; finalChaosRound?: boolean; fakeArtistInkLimit?: boolean; fakeArtistInkBudget?: number; fakeArtistWordPack?: string; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean; botCount?: number },
       ack?: (resp: any) => void
     ) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
@@ -682,6 +683,7 @@ io.on("connection", (socket) => {
       if (useExtraPrompt !== undefined) room.useExtraPrompt = Boolean(useExtraPrompt);
       if (useRandomTricks !== undefined) room.useRandomTricks = Boolean(useRandomTricks);
       if (sameTrickForAll !== undefined) room.sameTrickForAll = Boolean(sameTrickForAll);
+      if (selectedTrick !== undefined) room.selectedTrick = selectedTrick;
       if (finalChaosRound !== undefined) room.finalChaosRound = Boolean(finalChaosRound);
       if (fakeArtistInkLimit !== undefined) room.fakeArtistInkLimit = Boolean(fakeArtistInkLimit);
       if (fakeArtistInkBudget !== undefined) room.fakeArtistInkBudget = Number(fakeArtistInkBudget);

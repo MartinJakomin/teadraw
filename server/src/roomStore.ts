@@ -63,6 +63,7 @@ type Room = {
   useExtraPrompt: boolean;
   useRandomTricks: boolean;
   sameTrickForAll: boolean;
+  selectedTrick?: import("./gameTypes.js").TrickType | "random";
   finalChaosRound: boolean;
   fakeArtistInkLimit: boolean;
   fakeArtistInkBudget: number;
@@ -141,6 +142,7 @@ export function createRoom(host: Player): Room {
     useExtraPrompt: false,
     useRandomTricks: false,
     sameTrickForAll: false,
+    selectedTrick: "random",
     finalChaosRound: false,
     fakeArtistInkLimit: false,
     fakeArtistInkBudget: 600,
@@ -213,6 +215,7 @@ export function toPublicState(room: Room): RoomStatePublic {
     useExtraPrompt: room.useExtraPrompt,
     useRandomTricks: room.useRandomTricks,
     sameTrickForAll: room.sameTrickForAll,
+    selectedTrick: room.selectedTrick,
     finalChaosRound: room.finalChaosRound,
     fakeArtistInkLimit: room.fakeArtistInkLimit,
     fakeArtistInkBudget: room.fakeArtistInkBudget,
@@ -504,7 +507,7 @@ function computeRevealOrder(room: Room, players: PlayerId[], round: number): Pla
   return shuffle(players);
 }
 
-export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; useExtraPrompt?: boolean; useRandomTricks?: boolean; sameTrickForAll?: boolean; finalChaosRound?: boolean; fakeArtistInkLimit?: boolean; fakeArtistInkBudget?: number; fakeArtistWordPack?: string; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean }) {
+export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; useExtraPrompt?: boolean; useRandomTricks?: boolean; sameTrickForAll?: boolean; selectedTrick?: import("./gameTypes.js").TrickType | "random"; finalChaosRound?: boolean; fakeArtistInkLimit?: boolean; fakeArtistInkBudget?: number; fakeArtistWordPack?: string; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean }) {
   room.round = 1;
   room.gameType = options.gameType || "drawful";
   room.totalRounds = options.totalRounds !== undefined ? options.totalRounds : room.totalRounds;
@@ -515,6 +518,7 @@ export function startGame(room: Room, options: { gameType?: "drawful" | "fake_ar
   room.useExtraPrompt = options.useExtraPrompt || false;
   room.useRandomTricks = options.useRandomTricks || false;
   room.sameTrickForAll = options.sameTrickForAll || false;
+  room.selectedTrick = options.selectedTrick ?? "random";
   room.finalChaosRound = options.finalChaosRound || false;
   room.fakeArtistInkLimit = options.fakeArtistInkLimit || false;
   room.fakeArtistInkBudget = options.fakeArtistInkBudget || 600;
@@ -670,12 +674,34 @@ export function startRound(room: Room) {
     promptByPlayer.set(pid, isChaosRound ? sharedChaosPrompt : prompts[idx]!);
   });
 
-  const tricks: Array<import("./gameTypes.js").TrickType> = ["blind", "one_stroke", "large_brush", "random_brush", "half_time", "upside_down", "wobble", "mirror", "ink_limit"];
-  const sharedTrick = tricks[Math.floor(Math.random() * tricks.length)];
+  const tricks: Array<import("./gameTypes.js").TrickType> = [
+    "blind",
+    "one_stroke",
+    "large_brush",
+    "random_brush",
+    "half_time",
+    "upside_down",
+    "wobble",
+    "mirror",
+    "ink_limit",
+    "zoom_lens",
+    "rubberband",
+    "input_delay",
+    "spinning",
+    "glitch",
+    "gravity_drip",
+    "pixel_art",
+    "bubbles"
+  ];
+  const specificTrick: import("./gameTypes.js").TrickType | undefined =
+    room.selectedTrick && room.selectedTrick !== "random" ? room.selectedTrick : undefined;
+  const sharedTrick: import("./gameTypes.js").TrickType = specificTrick ?? tricks[Math.floor(Math.random() * tricks.length)]!;
 
   room.drawings = order.map((drawerId) => {
-    const trick = (isChaosRound || !room.useRandomTricks)
+    const trick: import("./gameTypes.js").TrickType | undefined = (isChaosRound || !room.useRandomTricks)
       ? undefined
+      : specificTrick
+      ? specificTrick
       : room.sameTrickForAll
       ? sharedTrick
       : tricks[Math.floor(Math.random() * tricks.length)];

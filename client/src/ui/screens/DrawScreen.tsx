@@ -39,6 +39,22 @@ export function DrawScreen(props: {
         return { icon: "🪞", title: "Mirror Symmetry", desc: "Horizontal symmetry! Every stroke is mirrored on both sides!" };
       case "ink_limit":
         return { icon: "🖋️", title: "Ink Budget", desc: "You only have 2,000px of ink! Budget your strokes carefully!" };
+      case "zoom_lens":
+        return { icon: "🔍", title: "Magnifying Lens", desc: "Canvas is zoomed in 3x! Draw up close through a moving magnifying lens!" };
+      case "rubberband":
+        return { icon: "🪀", title: "Slingshot Brush", desc: "Your brush is tethered to your pointer with bouncy rubberband spring physics!" };
+      case "input_delay":
+        return { icon: "⏱️", title: "1-Second Input Lag", desc: "Extreme latency! All strokes appear with a strict 1-second delay!" };
+      case "spinning":
+        return { icon: "🎠", title: "Spinning Canvas", desc: "Dizzy carousel! The canvas continuously spins 360° as you draw!" };
+      case "glitch":
+        return { icon: "👾", title: "Glitch Teleport", desc: "Cyberpunk glitch! Your brush randomly teleports and jitters around!" };
+      case "gravity_drip":
+        return { icon: "💧", title: "Gravity Drip", desc: "Wet paint! Drawn points drip and melt downwards like graffiti!" };
+      case "pixel_art":
+        return { icon: "🧱", title: "8-Bit Pixel Block", desc: "Retro arcade mode! All strokes snap into chunky pixel grid blocks!" };
+      case "bubbles":
+        return { icon: "🫧", title: "Bubble Stamping", desc: "Bubble stampede! Dragging stamps clusters of colorful glowing bubbles!" };
       default:
         return null;
     }

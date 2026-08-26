@@ -1,10 +1,31 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StrokeEvent, StrokePoint } from "../../types";
 
-function getCanvasPos(evt: PointerEvent, canvas: HTMLCanvasElement, isUpsideDown = false): StrokePoint {
+function getCanvasPos(
+  evt: PointerEvent,
+  canvas: HTMLCanvasElement,
+  isUpsideDown = false,
+  isSpinning = false,
+  spinStartTime = 0
+): StrokePoint {
   const rect = canvas.getBoundingClientRect();
-  const rawX = (evt.clientX - rect.left) * (canvas.width / rect.width);
-  const rawY = (evt.clientY - rect.top) * (canvas.height / rect.height);
+  let rawX = (evt.clientX - rect.left) * (canvas.width / rect.width);
+  let rawY = (evt.clientY - rect.top) * (canvas.height / rect.height);
+
+  if (isSpinning && spinStartTime > 0) {
+    const elapsed = (Date.now() - spinStartTime) % 14000;
+    const angle = (elapsed / 14000) * 2 * Math.PI;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const dx = rawX - cx;
+    const dy = rawY - cy;
+    // Un-rotate by -angle
+    const cos = Math.cos(-angle);
+    const sin = Math.sin(-angle);
+    rawX = cx + dx * cos - dy * sin;
+    rawY = cy + dx * sin + dy * cos;
+  }
+
   return {
     x: isUpsideDown ? canvas.width - rawX : rawX,
     y: isUpsideDown ? canvas.height - rawY : rawY
@@ -49,7 +70,9 @@ export function CanvasPad(props: {
   const width = props.width ?? 900;
   const height = props.height ?? 550;
   const isRandomBrush = props.trick === "random_brush";
-  const isSizeLocked = props.trick === "large_brush" || isRandomBrush;
+  const isPixelArt = props.trick === "pixel_art";
+  const isBubbles = props.trick === "bubbles";
+  const isSizeLocked = props.trick === "large_brush" || isRandomBrush || isPixelArt;
   const strokeWidth = props.trick === "large_brush" ? 35 : (props.strokeWidth ?? 10);
 
   const isOneStroke = Boolean(props.oneStrokeMode || props.trick === "one_stroke");
@@ -57,8 +80,15 @@ export function CanvasPad(props: {
   const isUpsideDown = props.trick === "upside_down";
   const isWobble = props.trick === "wobble";
   const isMirror = props.trick === "mirror";
+  const isZoom = props.trick === "zoom_lens";
+  const isRubberband = props.trick === "rubberband";
+  const isInputDelay = props.trick === "input_delay";
+  const isSpinning = props.trick === "spinning";
+  const isGlitch = props.trick === "glitch";
+  const isGravityDrip = props.trick === "gravity_drip";
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [color, setColor] = useState(props.initialColor ?? "#111111");
   const [size, setSize] = useState(strokeWidth);
@@ -69,7 +99,13 @@ export function CanvasPad(props: {
   const [inkRemaining, setInkRemaining] = useState<number>(maxInk);
   const inkRemainingRef = useRef<number>(maxInk);
 
-  // Reset ink whenever it's a new turn / initialDataUrl changes / when unlocked
+  // Zoom lens origin tracking
+  const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
+
+  // Spinning canvas reference timestamp
+  const spinStartTimeRef = useRef(Date.now());
+
+  // Reset ink whenever it's a new turn
   useEffect(() => {
     if (effectiveInkLimit) {
       inkRemainingRef.current = effectiveInkLimit;
@@ -91,7 +127,23 @@ export function CanvasPad(props: {
   const currentDynamicSizeRef = useRef<number>(14);
   const pointsSinceSizeShiftRef = useRef<number>(0);
 
-  // Keep live refs of all mutable properties so listeners NEVER need to re-bind
+  // Rubberband spring physics state
+  const springPosRef = useRef<StrokePoint>({ x: width / 2, y: height / 2 });
+  const springVelRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
+  const targetPointerRef = useRef<StrokePoint | null>(null);
+  const isSpringDrawingRef = useRef(false);
+  const [rubberbandDisplay, setRubberbandDisplay] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+
+  // Delayed events queue for 1s Input Lag
+  const delayedQueueRef = useRef<Array<{
+    time: number;
+    type: "down" | "move" | "up";
+    p: StrokePoint;
+    color: string;
+    size: number;
+  }>>([]);
+
+  // Keep live refs
   const colorRef = useRef(color);
   colorRef.current = color;
   const activeStrokeWidthRef = useRef(activeStrokeWidth);
@@ -106,6 +158,21 @@ export function CanvasPad(props: {
   isWobbleRef.current = isWobble;
   const isMirrorRef = useRef(isMirror);
   isMirrorRef.current = isMirror;
+  const isSpinningRef = useRef(isSpinning);
+  isSpinningRef.current = isSpinning;
+  const isGlitchRef = useRef(isGlitch);
+  isGlitchRef.current = isGlitch;
+  const isGravityDripRef = useRef(isGravityDrip);
+  isGravityDripRef.current = isGravityDrip;
+  const isPixelArtRef = useRef(isPixelArt);
+  isPixelArtRef.current = isPixelArt;
+  const isBubblesRef = useRef(isBubbles);
+  isBubblesRef.current = isBubbles;
+  const isRubberbandRef = useRef(isRubberband);
+  isRubberbandRef.current = isRubberband;
+  const isInputDelayRef = useRef(isInputDelay);
+  isInputDelayRef.current = isInputDelay;
+
   const disabledRef = useRef(props.disabled);
   disabledRef.current = props.disabled;
   const playerIdRef = useRef(props.playerId);
@@ -120,8 +187,20 @@ export function CanvasPad(props: {
   useEffect(() => {
     if (!props.disabled) {
       hasSubmittedRef.current = false;
+      spinStartTimeRef.current = Date.now();
     }
   }, [props.disabled]);
+
+  // Flush and submit drawing safely
+  const performSubmit = () => {
+    if (hasSubmittedRef.current) return;
+    hasSubmittedRef.current = true;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const url = canvas.toDataURL("image/png");
+      onSubmitRef.current(url, strokesRef.current);
+    }
+  };
 
   // Auto-submit when timer expires
   useEffect(() => {
@@ -129,13 +208,8 @@ export function CanvasPad(props: {
     const check = setInterval(() => {
       const remaining = props.endTime! - Date.now();
       if (remaining <= 0 && !hasSubmittedRef.current) {
-        hasSubmittedRef.current = true;
         clearInterval(check);
-        const canvas = canvasRef.current;
-        if (canvas) {
-          const url = canvas.toDataURL("image/png");
-          onSubmitRef.current(url, strokesRef.current);
-        }
+        performSubmit();
       }
     }, 500);
     return () => clearInterval(check);
@@ -151,20 +225,16 @@ export function CanvasPad(props: {
 
   const getShades = (hex: string, shadesOnly = false) => {
     if (hex === "#FFFFFF" || hex === "#000000") return ["#000000", "#333333", "#666666", "#999999", "#CCCCCC", "#FFFFFF"];
-
     if (!shadesOnly) return [hex, "#FFFFFF"];
 
-    const adjust = (color: string, amount: number) => {
-      let r = parseInt(color.substring(1, 3), 16);
-      let g = parseInt(color.substring(3, 5), 16);
-      let b = parseInt(color.substring(5, 7), 16);
+    const adjust = (col: string, amount: number) => {
+      let r = parseInt(col.substring(1, 3), 16);
+      let g = parseInt(col.substring(3, 5), 16);
+      let b = parseInt(col.substring(5, 7), 16);
       r = Math.max(0, Math.min(255, r + amount));
       g = Math.max(0, Math.min(255, g + amount));
       b = Math.max(0, Math.min(255, b + amount));
-      const rr = r.toString(16).padStart(2, "0");
-      const gg = g.toString(16).padStart(2, "0");
-      const bb = b.toString(16).padStart(2, "0");
-      return `#${rr}${gg}${bb}`;
+      return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
     };
 
     return [
@@ -185,7 +255,6 @@ export function CanvasPad(props: {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear strokes log for a fresh turn
     strokesRef.current = [];
     hasSubmittedRef.current = false;
 
@@ -208,6 +277,174 @@ export function CanvasPad(props: {
     }
   }, [props.initialDataUrl]);
 
+  // Helper to draw bubbles stamp
+  const drawBubbleCluster = (ctx: CanvasRenderingContext2D, center: StrokePoint, bubbleColor: string) => {
+    const count = Math.floor(Math.random() * 3) + 2;
+    for (let i = 0; i < count; i++) {
+      const radius = Math.floor(Math.random() * 16) + 7;
+      const offsetX = (Math.random() - 0.5) * 28;
+      const offsetY = (Math.random() - 0.5) * 28;
+      const bx = center.x + offsetX;
+      const by = center.y + offsetY;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(bx, by, radius, 0, Math.PI * 2);
+      ctx.fillStyle = bubbleColor + "55"; // translucent
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = bubbleColor;
+      ctx.stroke();
+
+      // Specular white highlight on bubble
+      ctx.beginPath();
+      ctx.arc(bx - radius * 0.35, by - radius * 0.35, Math.max(1.5, radius * 0.22), 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.fill();
+      ctx.restore();
+    }
+  };
+
+  // Helper to draw gravity paint drip
+  const drawGravityDrip = (ctx: CanvasRenderingContext2D, point: StrokePoint, dripColor: string) => {
+    const dripLen = Math.floor(Math.random() * 26) + 14;
+    const dripWidth = Math.max(2, activeStrokeWidthRef.current * 0.6);
+
+    ctx.save();
+    ctx.strokeStyle = dripColor;
+    ctx.fillStyle = dripColor;
+    ctx.lineWidth = dripWidth;
+    ctx.lineCap = "round";
+
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+    ctx.lineTo(point.x, point.y + dripLen);
+    ctx.stroke();
+
+    // Drip droplet bead
+    ctx.beginPath();
+    ctx.arc(point.x, point.y + dripLen, dripWidth * 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+
+  // Helper to draw pixel block
+  const drawPixelBlock = (ctx: CanvasRenderingContext2D, point: StrokePoint, blockColor: string) => {
+    const gridSize = 16;
+    const gx = Math.floor(point.x / gridSize) * gridSize;
+    const gy = Math.floor(point.y / gridSize) * gridSize;
+
+    ctx.save();
+    ctx.fillStyle = blockColor;
+    ctx.fillRect(gx, gy, gridSize, gridSize);
+    ctx.restore();
+  };
+
+  // Real-time animation loop for Rubberband & 1s Input Delay
+  useEffect(() => {
+    let animId: number;
+
+    const renderLoop = () => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+
+      // 1. Rubberband Spring Physics
+      if (isRubberbandRef.current && isSpringDrawingRef.current && targetPointerRef.current && canvas && ctx) {
+        const target = targetPointerRef.current;
+        const pos = springPosRef.current;
+        const vel = springVelRef.current;
+
+        const k = 0.16; // spring tension
+        const damping = 0.72; // friction
+
+        const fx = (target.x - pos.x) * k;
+        const fy = (target.y - pos.y) * k;
+
+        vel.vx = (vel.vx + fx) * damping;
+        vel.vy = (vel.vy + fy) * damping;
+
+        const nextX = pos.x + vel.vx;
+        const nextY = pos.y + vel.vy;
+
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = colorRef.current;
+        ctx.lineWidth = activeStrokeWidthRef.current;
+
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+        ctx.lineTo(nextX, nextY);
+        ctx.stroke();
+
+        springPosRef.current = { x: nextX, y: nextY };
+        currentPointsRef.current.push({ x: nextX, y: nextY });
+
+        // Update visual rubberband tether line
+        const rect = canvas.getBoundingClientRect();
+        setRubberbandDisplay({
+          x1: (pos.x / canvas.width) * rect.width,
+          y1: (pos.y / canvas.height) * rect.height,
+          x2: (target.x / canvas.width) * rect.width,
+          y2: (target.y / canvas.height) * rect.height
+        });
+
+        setHasDrawn(true);
+        onChangeRef.current?.();
+      }
+
+      // 2. 1-Second Input Lag Dequeue
+      if (isInputDelayRef.current && canvas && ctx) {
+        const now = Date.now();
+        const queue = delayedQueueRef.current;
+
+        while (queue.length > 0 && now - queue[0]!.time >= 1000) {
+          const item = queue.shift()!;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.strokeStyle = item.color;
+          ctx.lineWidth = item.size;
+
+          if (item.type === "down") {
+            currentPointsRef.current = [item.p];
+            strokeStartRef.current = item.p;
+            strokeMovedRef.current = false;
+          } else if (item.type === "move") {
+            const prev = currentPointsRef.current[currentPointsRef.current.length - 1];
+            currentPointsRef.current.push(item.p);
+            if (prev) {
+              ctx.beginPath();
+              ctx.moveTo(prev.x, prev.y);
+              ctx.lineTo(item.p.x, item.p.y);
+              ctx.stroke();
+            }
+            setHasDrawn(true);
+            onChangeRef.current?.();
+          } else if (item.type === "up") {
+            if (currentPointsRef.current.length > 0) {
+              const newStroke: StrokeEvent = {
+                id: Math.random().toString(36).substr(2, 9),
+                playerId: playerIdRef.current,
+                points: [...currentPointsRef.current],
+                brushSize: item.size,
+                color: hexToRgb(item.color),
+                opacity: 1,
+                timestamp: Date.now()
+              };
+              strokesRef.current.push(newStroke);
+              currentPointsRef.current = [];
+            }
+          }
+        }
+      }
+
+      animId = requestAnimationFrame(renderLoop);
+    };
+
+    animId = requestAnimationFrame(renderLoop);
+    return () => cancelAnimationFrame(animId);
+  }, []);
+
+  // Main Pointer Down / Move / Up Handling
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -224,19 +461,45 @@ export function CanvasPad(props: {
       try {
         canvas.setPointerCapture(evt.pointerId);
       } catch {}
-      let p = getCanvasPos(evt, canvas, isUpsideDownRef.current);
+
+      let p = getCanvasPos(evt, canvas, isUpsideDownRef.current, isSpinningRef.current, spinStartTimeRef.current);
+
       if (isWobbleRef.current) {
         const jX = (Math.random() - 0.5) * 16;
         const jY = (Math.random() - 0.5) * 16;
         p = { x: Math.max(0, Math.min(canvas.width, p.x + jX)), y: Math.max(0, Math.min(canvas.height, p.y + jY)) };
       }
+
+      // Input Delay queue
+      if (isInputDelayRef.current) {
+        delayedQueueRef.current.push({
+          time: Date.now(),
+          type: "down",
+          p,
+          color: colorRef.current,
+          size: activeStrokeWidthRef.current
+        });
+        return;
+      }
+
+      // Rubberband Spring
+      if (isRubberbandRef.current) {
+        springPosRef.current = { ...p };
+        springVelRef.current = { vx: 0, vy: 0 };
+        targetPointerRef.current = { ...p };
+        isSpringDrawingRef.current = true;
+        currentPointsRef.current = [p];
+        return;
+      }
+
       strokeStartRef.current = p;
       currentPointsRef.current = [p];
 
-      // Setup drawing styles for this stroke
+      // Setup drawing styles for standard / special brushes
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = colorRef.current;
+
       if (isRandomBrushRef.current) {
         const randomSizes = [4, 8, 14, 22, 32, 42];
         currentDynamicSizeRef.current = randomSizes[Math.floor(Math.random() * randomSizes.length)]!;
@@ -245,17 +508,63 @@ export function CanvasPad(props: {
       } else {
         ctx.lineWidth = activeStrokeWidthRef.current;
       }
+
+      if (isPixelArtRef.current) {
+        drawPixelBlock(ctx, p, colorRef.current);
+        setHasDrawn(true);
+        onChangeRef.current?.();
+      } else if (isBubblesRef.current) {
+        drawBubbleCluster(ctx, p, colorRef.current);
+        setHasDrawn(true);
+        onChangeRef.current?.();
+      }
     };
 
     const onMove = (evt: PointerEvent) => {
+      // Zoom lens position tracking
+      if (isZoom && containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const zx = Math.max(0, Math.min(100, ((evt.clientX - rect.left) / rect.width) * 100));
+        const zy = Math.max(0, Math.min(100, ((evt.clientY - rect.top) / rect.height) * 100));
+        setZoomOrigin({ x: zx, y: zy });
+      }
+
       if (!drawing || (isOneStrokeRef.current && hasSubmittedRef.current)) return;
-      const rawPos = getCanvasPos(evt, canvas, isUpsideDownRef.current);
+
+      const rawPos = getCanvasPos(evt, canvas, isUpsideDownRef.current, isSpinningRef.current, spinStartTimeRef.current);
       let p = rawPos;
+
       if (isWobbleRef.current) {
         const angle = Date.now() / 35 + currentPointsRef.current.length * 0.5;
         const jX = Math.sin(angle) * 16 + (Math.random() - 0.5) * 10;
         const jY = Math.cos(angle) * 16 + (Math.random() - 0.5) * 10;
         p = { x: Math.max(0, Math.min(canvas.width, p.x + jX)), y: Math.max(0, Math.min(canvas.height, p.y + jY)) };
+      }
+
+      if (isGlitchRef.current) {
+        if (Math.random() < 0.28) {
+          const gx = (Math.random() - 0.5) * 45;
+          const gy = (Math.random() - 0.5) * 45;
+          p = { x: Math.max(0, Math.min(canvas.width, p.x + gx)), y: Math.max(0, Math.min(canvas.height, p.y + gy)) };
+        }
+      }
+
+      // Input Delay queue
+      if (isInputDelayRef.current) {
+        delayedQueueRef.current.push({
+          time: Date.now(),
+          type: "move",
+          p,
+          color: colorRef.current,
+          size: activeStrokeWidthRef.current
+        });
+        return;
+      }
+
+      // Rubberband Spring
+      if (isRubberbandRef.current) {
+        targetPointerRef.current = p;
+        return;
       }
 
       if (isRandomBrushRef.current) {
@@ -305,17 +614,29 @@ export function CanvasPad(props: {
         if (dist > 2) strokeMovedRef.current = true;
       }
 
-      if (prev) {
-        ctx.beginPath();
-        ctx.moveTo(prev.x, prev.y);
-        ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-
-        if (isMirrorRef.current) {
+      if (isPixelArtRef.current) {
+        drawPixelBlock(ctx, p, colorRef.current);
+      } else if (isBubblesRef.current) {
+        if (!prev || Math.hypot(p.x - prev.x, p.y - prev.y) > 14) {
+          drawBubbleCluster(ctx, p, colorRef.current);
+        }
+      } else {
+        if (prev) {
           ctx.beginPath();
-          ctx.moveTo(canvas.width - prev.x, prev.y);
-          ctx.lineTo(canvas.width - p.x, p.y);
+          ctx.moveTo(prev.x, prev.y);
+          ctx.lineTo(p.x, p.y);
           ctx.stroke();
+
+          if (isMirrorRef.current) {
+            ctx.beginPath();
+            ctx.moveTo(canvas.width - prev.x, prev.y);
+            ctx.lineTo(canvas.width - p.x, p.y);
+            ctx.stroke();
+          }
+
+          if (isGravityDripRef.current && Math.random() < 0.12) {
+            drawGravityDrip(ctx, p, colorRef.current);
+          }
         }
       }
 
@@ -327,14 +648,32 @@ export function CanvasPad(props: {
       if (!drawing) return;
       drawing = false;
 
+      if (isInputDelayRef.current) {
+        const p = getCanvasPos(evt, canvas, isUpsideDownRef.current, isSpinningRef.current, spinStartTimeRef.current);
+        delayedQueueRef.current.push({
+          time: Date.now(),
+          type: "up",
+          p,
+          color: colorRef.current,
+          size: activeStrokeWidthRef.current
+        });
+        return;
+      }
+
+      if (isRubberbandRef.current) {
+        isSpringDrawingRef.current = false;
+        targetPointerRef.current = null;
+        setRubberbandDisplay(null);
+      }
+
       if (isOneStrokeRef.current && hasSubmittedRef.current) {
         return;
       }
 
       if (currentPointsRef.current.length > 0) {
         const effectiveStrokeSize = isRandomBrushRef.current ? currentDynamicSizeRef.current : activeStrokeWidthRef.current;
-        // If the pointer didn't move, it's a dot. We draw it now on release.
-        if (!strokeMovedRef.current) {
+
+        if (!strokeMovedRef.current && !isPixelArtRef.current && !isBubblesRef.current) {
           const p = currentPointsRef.current[0]!;
           ctx.beginPath();
           ctx.arc(p.x, p.y, effectiveStrokeSize / 2, 0, Math.PI * 2);
@@ -363,7 +702,7 @@ export function CanvasPad(props: {
           strokesRef.current.push({
             id: Math.random().toString(36).substr(2, 9),
             playerId: playerIdRef.current,
-            points: currentPointsRef.current.map(pt => ({ x: canvas.width - pt.x, y: pt.y })),
+            points: currentPointsRef.current.map((pt) => ({ x: canvas.width - pt.x, y: pt.y })),
             brushSize: effectiveStrokeSize,
             color: hexToRgb(colorRef.current),
             opacity: 1,
@@ -372,9 +711,7 @@ export function CanvasPad(props: {
         }
 
         if (isOneStrokeRef.current && canvasRef.current) {
-          hasSubmittedRef.current = true;
-          const url = canvasRef.current.toDataURL("image/png");
-          onSubmitRef.current(url, strokesRef.current);
+          performSubmit();
         }
       }
 
@@ -382,19 +719,19 @@ export function CanvasPad(props: {
       currentPointsRef.current = [];
       try {
         canvas.releasePointerCapture(evt.pointerId);
-      } catch { }
+      } catch {}
     };
 
     canvas.addEventListener("pointerdown", onDown);
-    canvas.addEventListener("pointermove", onMove);
+    window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
 
     return () => {
       canvas.removeEventListener("pointerdown", onDown);
-      canvas.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, []);
+  }, [isZoom]);
 
   const clear = () => {
     const canvas = canvasRef.current;
@@ -411,6 +748,7 @@ export function CanvasPad(props: {
     strokeMovedRef.current = false;
     strokeStartRef.current = null;
     strokesRef.current = [];
+    delayedQueueRef.current = [];
     hasSubmittedRef.current = false;
     props.onChange?.();
   };
@@ -456,30 +794,74 @@ export function CanvasPad(props: {
         </div>
       )}
 
-      <div className="canvasWrap" style={{ position: "relative" }}>
+      <div
+        ref={containerRef}
+        className={`canvasWrap ${isZoom ? "trick-zoom-viewport" : ""}`}
+        style={{ position: "relative", overflow: isSpinning || isZoom ? "hidden" : "visible" }}
+      >
         <canvas
           ref={canvasRef}
           width={width}
           height={height}
-          className="canvas"
+          className={`canvas ${isSpinning ? "trick-spinning-canvas" : ""}`}
           style={{
-            ...(isBlind ? { opacity: 0.05, filter: "blur(20px)" } : {})
+            ...(isBlind ? { opacity: 0.05, filter: "blur(20px)" } : {}),
+            ...(isZoom ? { transform: "scale(2.65)", transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`, transition: "transform-origin 0.04s ease-out" } : {})
           }}
         />
+
+        {/* Rubberband visual elastic band */}
+        {rubberbandDisplay && (
+          <svg className="trick-rubberband-tether">
+            <line
+              x1={rubberbandDisplay.x1}
+              y1={rubberbandDisplay.y1}
+              x2={rubberbandDisplay.x2}
+              y2={rubberbandDisplay.y2}
+              stroke="#ec4899"
+              strokeWidth={3}
+              strokeDasharray="4,4"
+            />
+            <circle cx={rubberbandDisplay.x2} cy={rubberbandDisplay.y2} r={6} fill="#ec4899" />
+          </svg>
+        )}
+
         {isBlind && (
-          <div style={{
-            position: "absolute",
-            inset: 0,
-            display: "grid",
-            placeItems: "center",
-            pointerEvents: "none",
-            background: "rgba(0,0,0,0.45)",
-            color: "#fff",
-            fontFamily: "Outfit, sans-serif",
-            fontWeight: 800,
-            fontSize: "1.5rem"
-          }}>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "grid",
+              placeItems: "center",
+              pointerEvents: "none",
+              background: "rgba(0,0,0,0.45)",
+              color: "#fff",
+              fontFamily: "Outfit, sans-serif",
+              fontWeight: 800,
+              fontSize: "1.5rem"
+            }}
+          >
             🙈 Blind Drawing Active! Strokes are hidden!
+          </div>
+        )}
+
+        {isInputDelay && (
+          <div
+            style={{
+              position: "absolute",
+              top: "12px",
+              right: "12px",
+              background: "rgba(249, 115, 22, 0.3)",
+              border: "1px solid rgba(249, 115, 22, 0.6)",
+              color: "#fed7aa",
+              padding: "4px 12px",
+              borderRadius: "999px",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+              pointerEvents: "none"
+            }}
+          >
+            ⏱️ 1.0s Input Lag
           </div>
         )}
       </div>
@@ -514,7 +896,11 @@ export function CanvasPad(props: {
               />
               {isSizeLocked && (
                 <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#f59e0b", whiteSpace: "nowrap" }}>
-                  {props.trick === "large_brush" ? "35px (Mega)" : "🎲 Dynamic (Morphing)"}
+                  {props.trick === "large_brush"
+                    ? "35px (Mega)"
+                    : props.trick === "pixel_art"
+                    ? "16px (Pixel Grid)"
+                    : "🎲 Dynamic (Morphing)"}
                 </span>
               )}
             </div>
@@ -525,16 +911,13 @@ export function CanvasPad(props: {
               Clear
             </button>
 
-            <div className="muted">
-              {hasDrawn ? "Nice." : "Draw your line!"}
-            </div>
+            <div className="muted">{hasDrawn ? "Nice." : "Draw your line!"}</div>
 
             <button
               className="btn primary"
               onClick={() => {
                 if (props.oneStrokeMode && hasSubmittedRef.current) return;
-                if (props.oneStrokeMode) hasSubmittedRef.current = true;
-                props.onSubmit(toDataUrl(), strokesRef.current);
+                performSubmit();
               }}
               disabled={!hasDrawn || (props.oneStrokeMode && hasSubmittedRef.current)}
             >
