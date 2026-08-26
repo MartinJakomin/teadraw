@@ -11,6 +11,7 @@ export function LobbyScreen(props: {
   onToggleSpectator?: (ack?: (resp: { ok?: boolean; error?: string }) => void) => void;
   onLeave: () => void;
   onKick?: (playerId: string) => void;
+  onPractice?: () => void;
 }) {
   const { room } = props;
   const [specMsg, setSpecMsg] = useState("");
@@ -48,30 +49,26 @@ export function LobbyScreen(props: {
                 }}
                 title="Click to copy room code"
               >
-                {room.roomCode}
+                {room.roomCode} {copiedLink ? "✓ Copied!" : "📋"}
               </div>
-              <button
-                className="btn"
-                style={{ padding: "6px 14px", fontSize: "0.85rem" }}
-                onClick={() => {
-                  navigator.clipboard.writeText(inviteUrl);
-                  setCopiedLink(true);
-                  setTimeout(() => setCopiedLink(false), 2000);
-                }}
-              >
-                🔗 {copiedLink ? "Link Copied!" : "Copy Join Link"}
-              </button>
+            </div>
+            <div className="muted small">
+              Share this code or let friends scan the QR code to join!
             </div>
           </div>
 
-          <div className="row" style={{ gap: "16px", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             {qrUrl && (
               <div
                 style={{
-                  background: "#fff",
+                  background: "#ffffff",
                   padding: "6px",
                   borderRadius: "12px",
-                  boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "2px",
                   textAlign: "center"
                 }}
                 title="Scan with mobile camera to join instantly"
@@ -79,6 +76,21 @@ export function LobbyScreen(props: {
                 <img src={qrUrl} alt="QR Code" style={{ width: "90px", height: "90px", display: "block" }} />
                 <div style={{ color: "#0f172a", fontSize: "0.65rem", fontWeight: 800 }}>SCAN TO JOIN</div>
               </div>
+            )}
+            {props.onPractice && (
+              <button
+                className="btn"
+                onClick={props.onPractice}
+                style={{
+                  background: "rgba(99, 102, 241, 0.18)",
+                  border: "1px solid rgba(99, 102, 241, 0.4)",
+                  color: "#a5b4fc",
+                  fontWeight: 700
+                }}
+                title="Doodle on a blank canvas while waiting"
+              >
+                🎨 Practice
+              </button>
             )}
             <button className="btn" onClick={props.onLeave}>
               Leave
@@ -405,8 +417,8 @@ export function LobbyScreen(props: {
                               <option value="mirror">🪞 Mirror Symmetry</option>
                               <option value="ink_limit">🖋️ Ink Budget (2,000px)</option>
                               <option value="zoom_lens">🔍 Magnifying Lens (3x Zoom)</option>
-                              <option value="rubberband">🪀 Slingshot Brush (Spring Physics)</option>
-                              <option value="input_delay">⏱️ 1-Second Input Lag (Delayed)</option>
+                              <option value="rubberband">🐦 Slingshot (Pull Back & Shoot)</option>
+                              <option value="input_delay">⏱️ 2-Second Input Lag (Delayed)</option>
                               <option value="spinning">🎠 Spinning Canvas (Continuous 360°)</option>
                               <option value="glitch">👾 Glitch Teleport (Jitter Jumps)</option>
                               <option value="gravity_drip">💧 Gravity Drip (Melting Paint)</option>

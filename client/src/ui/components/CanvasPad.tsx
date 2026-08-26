@@ -62,6 +62,7 @@ export function CanvasPad(props: {
   disabled?: boolean;
   submitText?: string;
   oneStrokeMode?: boolean;
+  autoSubmitOnOneStroke?: boolean;
   showShades?: boolean;
   endTime?: number;
   trick?: import("../../types").TrickType;
@@ -126,15 +127,25 @@ export function CanvasPad(props: {
   const hasSubmittedRef = useRef(false);
   const currentDynamicSizeRef = useRef<number>(14);
   const pointsSinceSizeShiftRef = useRef<number>(0);
+  const pointsSinceGlitchRef = useRef<number>(0);
+  const teleportOffsetRef = useRef<StrokePoint>({ x: 0, y: 0 });
+  const isTeleportJumpRef = useRef<boolean>(false);
 
-  // Rubberband spring physics state
-  const springPosRef = useRef<StrokePoint>({ x: width / 2, y: height / 2 });
-  const springVelRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
-  const targetPointerRef = useRef<StrokePoint | null>(null);
-  const isSpringDrawingRef = useRef(false);
-  const [rubberbandDisplay, setRubberbandDisplay] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  // Slingshot Pull & Shoot physics state
+  const slingshotAnchorRef = useRef<StrokePoint | null>(null);
+  const slingshotPullRef = useRef<StrokePoint | null>(null);
+  const isSlingshotAimingRef = useRef<boolean>(false);
 
-  // Delayed events queue for 1s Input Lag
+  // Slingshot visual trajectory DOM refs
+  const tetherSvgRef = useRef<SVGSVGElement | null>(null);
+  const tetherPullLineRef = useRef<SVGLineElement | null>(null);
+  const tetherAimLineRef = useRef<SVGLineElement | null>(null);
+  const tetherAnchorCircleRef = useRef<SVGCircleElement | null>(null);
+  const tetherPullCircleRef = useRef<SVGCircleElement | null>(null);
+  const tetherTargetCircleRef = useRef<SVGCircleElement | null>(null);
+  const tetherTargetCenterRef = useRef<SVGCircleElement | null>(null);
+
+  // Delayed events queue for 2s Input Lag
   const delayedQueueRef = useRef<Array<{
     time: number;
     type: "down" | "move" | "up";
@@ -277,13 +288,13 @@ export function CanvasPad(props: {
     }
   }, [props.initialDataUrl]);
 
-  // Helper to draw bubbles stamp
+  // Helper to draw bubbles stamp (small clustered bubbles)
   const drawBubbleCluster = (ctx: CanvasRenderingContext2D, center: StrokePoint, bubbleColor: string) => {
-    const count = Math.floor(Math.random() * 3) + 2;
+    const count = Math.floor(Math.random() * 4) + 3;
     for (let i = 0; i < count; i++) {
-      const radius = Math.floor(Math.random() * 16) + 7;
-      const offsetX = (Math.random() - 0.5) * 28;
-      const offsetY = (Math.random() - 0.5) * 28;
+      const radius = Math.floor(Math.random() * 7) + 3; // 3px to 9px small bubbles
+      const offsetX = (Math.random() - 0.5) * 22;
+      const offsetY = (Math.random() - 0.5) * 22;
       const bx = center.x + offsetX;
       const by = center.y + offsetY;
 
@@ -292,45 +303,67 @@ export function CanvasPad(props: {
       ctx.arc(bx, by, radius, 0, Math.PI * 2);
       ctx.fillStyle = bubbleColor + "55"; // translucent
       ctx.fill();
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 1.5;
       ctx.strokeStyle = bubbleColor;
       ctx.stroke();
 
       // Specular white highlight on bubble
       ctx.beginPath();
-      ctx.arc(bx - radius * 0.35, by - radius * 0.35, Math.max(1.5, radius * 0.22), 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.arc(bx - radius * 0.35, by - radius * 0.35, Math.max(0.8, radius * 0.25), 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
       ctx.fill();
       ctx.restore();
     }
   };
 
-  // Helper to draw gravity paint drip
+  // Helper to draw gravity paint drip (wide fan spread with high size variance)
   const drawGravityDrip = (ctx: CanvasRenderingContext2D, point: StrokePoint, dripColor: string) => {
-    const dripLen = Math.floor(Math.random() * 26) + 14;
-    const dripWidth = Math.max(2, activeStrokeWidthRef.current * 0.6);
+    const streamCount = Math.random() < 0.6 ? 1 : Math.floor(Math.random() * 2) + 2;
+    for (let s = 0; s < streamCount; s++) {
+      const spreadAngle = (Math.random() - 0.5) * (Math.PI * 0.65); // -55 to +55 deg spread
+      const lengthTier = Math.random();
+      const dripLen = lengthTier < 0.35
+        ? Math.floor(Math.random() * 22) + 10 // Short stubby dribbles
+        : lengthTier < 0.75
+        ? Math.floor(Math.random() * 45) + 35 // Medium runs
+        : Math.floor(Math.random() * 45) + 75; // Giant dramatic drippers
 
-    ctx.save();
-    ctx.strokeStyle = dripColor;
-    ctx.fillStyle = dripColor;
-    ctx.lineWidth = dripWidth;
-    ctx.lineCap = "round";
+      const dripWidth = Math.max(1.5, activeStrokeWidthRef.current * (0.22 + Math.random() * 0.85));
+      const endX = point.x + Math.sin(spreadAngle) * (dripLen * 0.7);
+      const endY = point.y + Math.cos(spreadAngle) * dripLen;
 
-    ctx.beginPath();
-    ctx.moveTo(point.x, point.y);
-    ctx.lineTo(point.x, point.y + dripLen);
-    ctx.stroke();
+      ctx.save();
+      ctx.strokeStyle = dripColor;
+      ctx.fillStyle = dripColor;
+      ctx.lineWidth = dripWidth;
+      ctx.lineCap = "round";
 
-    // Drip droplet bead
-    ctx.beginPath();
-    ctx.arc(point.x, point.y + dripLen, dripWidth * 0.9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      const midX = (point.x + endX) / 2 + (Math.random() - 0.5) * 12;
+      const midY = (point.y + endY) / 2;
+      ctx.quadraticCurveTo(midX, midY, endX, endY);
+      ctx.stroke();
+
+      // Droplet bead at tip
+      ctx.beginPath();
+      ctx.arc(endX, endY, dripWidth * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Detached falling splatter drop
+      if (Math.random() < 0.45) {
+        const fallDist = Math.floor(Math.random() * 22) + 12;
+        ctx.beginPath();
+        ctx.arc(endX + Math.sin(spreadAngle) * fallDist, endY + Math.cos(spreadAngle) * fallDist, dripWidth * 0.75, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
   };
 
-  // Helper to draw pixel block
+  // Helper to draw pixel block (32px chunky arcade grid)
   const drawPixelBlock = (ctx: CanvasRenderingContext2D, point: StrokePoint, blockColor: string) => {
-    const gridSize = 16;
+    const gridSize = 32;
     const gx = Math.floor(point.x / gridSize) * gridSize;
     const gy = Math.floor(point.y / gridSize) * gridSize;
 
@@ -340,7 +373,74 @@ export function CanvasPad(props: {
     ctx.restore();
   };
 
-  // Real-time animation loop for Rubberband & 1s Input Delay
+  // Direct DOM Slingshot trajectory updater (zero React re-renders)
+  const updateSlingshotDOM = (anchor: StrokePoint, pull: StrokePoint) => {
+    const canvas = canvasRef.current;
+    if (
+      !canvas ||
+      !tetherSvgRef.current ||
+      !tetherPullLineRef.current ||
+      !tetherAimLineRef.current ||
+      !tetherAnchorCircleRef.current ||
+      !tetherPullCircleRef.current ||
+      !tetherTargetCircleRef.current ||
+      !tetherTargetCenterRef.current
+    )
+      return;
+
+    const rect = canvas.getBoundingClientRect();
+    const ax = (anchor.x / canvas.width) * rect.width;
+    const ay = (anchor.y / canvas.height) * rect.height;
+    const px = (pull.x / canvas.width) * rect.width;
+    const py = (pull.y / canvas.height) * rect.height;
+
+    const dx = pull.x - anchor.x;
+    const dy = pull.y - anchor.y;
+    const pullDist = Math.hypot(dx, dy);
+
+    // Calculate opposite firing vector
+    const flingPower = Math.min(320, pullDist * 2.2);
+    const angle = Math.atan2(-dy, -dx);
+    const targetX = Math.max(10, Math.min(canvas.width - 10, anchor.x + Math.cos(angle) * flingPower));
+    const targetY = Math.max(10, Math.min(canvas.height - 10, anchor.y + Math.sin(angle) * flingPower));
+
+    const tx = (targetX / canvas.width) * rect.width;
+    const ty = (targetY / canvas.height) * rect.height;
+
+    tetherSvgRef.current.style.display = "block";
+
+    // 1. Pull elastic cord
+    tetherPullLineRef.current.setAttribute("x1", String(ax));
+    tetherPullLineRef.current.setAttribute("y1", String(ay));
+    tetherPullLineRef.current.setAttribute("x2", String(px));
+    tetherPullLineRef.current.setAttribute("y2", String(py));
+
+    // 2. Aiming trajectory laser line
+    tetherAimLineRef.current.setAttribute("x1", String(ax));
+    tetherAimLineRef.current.setAttribute("y1", String(ay));
+    tetherAimLineRef.current.setAttribute("x2", String(tx));
+    tetherAimLineRef.current.setAttribute("y2", String(ty));
+
+    // 3. Anchor & Pull markers
+    tetherAnchorCircleRef.current.setAttribute("cx", String(ax));
+    tetherAnchorCircleRef.current.setAttribute("cy", String(ay));
+    tetherPullCircleRef.current.setAttribute("cx", String(px));
+    tetherPullCircleRef.current.setAttribute("cy", String(py));
+
+    // 4. Target landing reticle
+    tetherTargetCircleRef.current.setAttribute("cx", String(tx));
+    tetherTargetCircleRef.current.setAttribute("cy", String(ty));
+    tetherTargetCenterRef.current.setAttribute("cx", String(tx));
+    tetherTargetCenterRef.current.setAttribute("cy", String(ty));
+  };
+
+  const hideTetherDOM = () => {
+    if (tetherSvgRef.current) {
+      tetherSvgRef.current.style.display = "none";
+    }
+  };
+
+  // Real-time animation loop for 2s Input Delay Dequeue
   useEffect(() => {
     let animId: number;
 
@@ -348,56 +448,11 @@ export function CanvasPad(props: {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext("2d");
 
-      // 1. Rubberband Spring Physics
-      if (isRubberbandRef.current && isSpringDrawingRef.current && targetPointerRef.current && canvas && ctx) {
-        const target = targetPointerRef.current;
-        const pos = springPosRef.current;
-        const vel = springVelRef.current;
-
-        const k = 0.16; // spring tension
-        const damping = 0.72; // friction
-
-        const fx = (target.x - pos.x) * k;
-        const fy = (target.y - pos.y) * k;
-
-        vel.vx = (vel.vx + fx) * damping;
-        vel.vy = (vel.vy + fy) * damping;
-
-        const nextX = pos.x + vel.vx;
-        const nextY = pos.y + vel.vy;
-
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.strokeStyle = colorRef.current;
-        ctx.lineWidth = activeStrokeWidthRef.current;
-
-        ctx.beginPath();
-        ctx.moveTo(pos.x, pos.y);
-        ctx.lineTo(nextX, nextY);
-        ctx.stroke();
-
-        springPosRef.current = { x: nextX, y: nextY };
-        currentPointsRef.current.push({ x: nextX, y: nextY });
-
-        // Update visual rubberband tether line
-        const rect = canvas.getBoundingClientRect();
-        setRubberbandDisplay({
-          x1: (pos.x / canvas.width) * rect.width,
-          y1: (pos.y / canvas.height) * rect.height,
-          x2: (target.x / canvas.width) * rect.width,
-          y2: (target.y / canvas.height) * rect.height
-        });
-
-        setHasDrawn(true);
-        onChangeRef.current?.();
-      }
-
-      // 2. 1-Second Input Lag Dequeue
       if (isInputDelayRef.current && canvas && ctx) {
         const now = Date.now();
         const queue = delayedQueueRef.current;
 
-        while (queue.length > 0 && now - queue[0]!.time >= 1000) {
+        while (queue.length > 0 && now - queue[0]!.time >= 2000) {
           const item = queue.shift()!;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
@@ -482,14 +537,18 @@ export function CanvasPad(props: {
         return;
       }
 
-      // Rubberband Spring
+      // Slingshot Pull & Shoot mode
       if (isRubberbandRef.current) {
-        springPosRef.current = { ...p };
-        springVelRef.current = { vx: 0, vy: 0 };
-        targetPointerRef.current = { ...p };
-        isSpringDrawingRef.current = true;
-        currentPointsRef.current = [p];
+        slingshotAnchorRef.current = { ...p };
+        slingshotPullRef.current = { ...p };
+        isSlingshotAimingRef.current = true;
+        updateSlingshotDOM(p, p);
         return;
+      }
+
+      if (isGlitchRef.current) {
+        teleportOffsetRef.current = { x: 0, y: 0 };
+        isTeleportJumpRef.current = false;
       }
 
       strokeStartRef.current = p;
@@ -541,11 +600,35 @@ export function CanvasPad(props: {
         p = { x: Math.max(0, Math.min(canvas.width, p.x + jX)), y: Math.max(0, Math.min(canvas.height, p.y + jY)) };
       }
 
+      // Slingshot Aiming
+      if (isRubberbandRef.current && isSlingshotAimingRef.current && slingshotAnchorRef.current) {
+        slingshotPullRef.current = p;
+        updateSlingshotDOM(slingshotAnchorRef.current, p);
+        return;
+      }
+
+      // Glitch Teleport (Controlled, less frequent, clean gap jumps)
       if (isGlitchRef.current) {
-        if (Math.random() < 0.28) {
-          const gx = (Math.random() - 0.5) * 45;
-          const gy = (Math.random() - 0.5) * 45;
-          p = { x: Math.max(0, Math.min(canvas.width, p.x + gx)), y: Math.max(0, Math.min(canvas.height, p.y + gy)) };
+        pointsSinceGlitchRef.current = (pointsSinceGlitchRef.current || 0) + 1;
+        if (pointsSinceGlitchRef.current >= 26 || (pointsSinceGlitchRef.current >= 16 && Math.random() < 0.05)) {
+          pointsSinceGlitchRef.current = 0;
+          const jumpAngle = Math.random() * Math.PI * 2;
+          const jumpDist = Math.floor(Math.random() * 60) + 60; // 60px to 120px controlled jump
+          const jumpDistX = Math.cos(jumpAngle) * jumpDist;
+          const jumpDistY = Math.sin(jumpAngle) * jumpDist;
+          teleportOffsetRef.current = { x: jumpDistX, y: jumpDistY };
+
+          const teleportX = Math.max(10, Math.min(canvas.width - 10, rawPos.x + jumpDistX));
+          const teleportY = Math.max(10, Math.min(canvas.height - 10, rawPos.y + jumpDistY));
+
+          p = { x: teleportX, y: teleportY };
+          isTeleportJumpRef.current = true;
+        } else {
+          const off = teleportOffsetRef.current;
+          p = {
+            x: Math.max(10, Math.min(canvas.width - 10, rawPos.x + off.x)),
+            y: Math.max(10, Math.min(canvas.height - 10, rawPos.y + off.y))
+          };
         }
       }
 
@@ -558,12 +641,6 @@ export function CanvasPad(props: {
           color: colorRef.current,
           size: activeStrokeWidthRef.current
         });
-        return;
-      }
-
-      // Rubberband Spring
-      if (isRubberbandRef.current) {
-        targetPointerRef.current = p;
         return;
       }
 
@@ -617,9 +694,16 @@ export function CanvasPad(props: {
       if (isPixelArtRef.current) {
         drawPixelBlock(ctx, p, colorRef.current);
       } else if (isBubblesRef.current) {
-        if (!prev || Math.hypot(p.x - prev.x, p.y - prev.y) > 14) {
+        if (!prev || Math.hypot(p.x - prev.x, p.y - prev.y) > 10) {
           drawBubbleCluster(ctx, p, colorRef.current);
         }
+      } else if (isTeleportJumpRef.current) {
+        // Disconnected jump with empty space - zero interpolation line
+        isTeleportJumpRef.current = false;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (isRandomBrushRef.current ? currentDynamicSizeRef.current : activeStrokeWidthRef.current) / 2, 0, Math.PI * 2);
+        ctx.fillStyle = colorRef.current;
+        ctx.fill();
       } else {
         if (prev) {
           ctx.beginPath();
@@ -634,7 +718,7 @@ export function CanvasPad(props: {
             ctx.stroke();
           }
 
-          if (isGravityDripRef.current && Math.random() < 0.12) {
+          if (isGravityDripRef.current && Math.random() < 0.09) {
             drawGravityDrip(ctx, p, colorRef.current);
           }
         }
@@ -660,10 +744,102 @@ export function CanvasPad(props: {
         return;
       }
 
-      if (isRubberbandRef.current) {
-        isSpringDrawingRef.current = false;
-        targetPointerRef.current = null;
-        setRubberbandDisplay(null);
+      // Slingshot Release -> Shoot ink projectile!
+      if (isRubberbandRef.current && isSlingshotAimingRef.current && slingshotAnchorRef.current) {
+        const anchor = slingshotAnchorRef.current;
+        const pull = slingshotPullRef.current || anchor;
+        isSlingshotAimingRef.current = false;
+        slingshotAnchorRef.current = null;
+        slingshotPullRef.current = null;
+        hideTetherDOM();
+
+        const dx = pull.x - anchor.x;
+        const dy = pull.y - anchor.y;
+        const pullDist = Math.hypot(dx, dy);
+
+        if (pullDist > 6) {
+          const flingPower = Math.min(320, pullDist * 2.2);
+          const angle = Math.atan2(-dy, -dx);
+          const targetX = Math.max(10, Math.min(canvas.width - 10, anchor.x + Math.cos(angle) * flingPower));
+          const targetY = Math.max(10, Math.min(canvas.height - 10, anchor.y + Math.sin(angle) * flingPower));
+
+          ctx.save();
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.strokeStyle = colorRef.current;
+          ctx.fillStyle = colorRef.current;
+          ctx.lineWidth = activeStrokeWidthRef.current;
+
+          const strokePts: StrokePoint[] = [];
+          const steps = 14;
+          ctx.beginPath();
+          ctx.moveTo(anchor.x, anchor.y);
+          strokePts.push({ x: anchor.x, y: anchor.y });
+
+          for (let step = 1; step <= steps; step++) {
+            const t = step / steps;
+            const ptX = anchor.x + (targetX - anchor.x) * t;
+            const ptY = anchor.y + (targetY - anchor.y) * t + Math.sin(t * Math.PI) * (pullDist * 0.14);
+            ctx.lineTo(ptX, ptY);
+            strokePts.push({ x: ptX, y: ptY });
+          }
+          ctx.stroke();
+
+          // Impact splatter head
+          ctx.beginPath();
+          ctx.arc(targetX, targetY, activeStrokeWidthRef.current * 0.85, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Impact droplet beads
+          for (let d = 0; d < 3; d++) {
+            const sAngle = angle + (Math.random() - 0.5) * 1.6;
+            const sDist = Math.floor(Math.random() * 14) + 6;
+            const sx = targetX + Math.cos(sAngle) * sDist;
+            const sy = targetY + Math.sin(sAngle) * sDist;
+            ctx.beginPath();
+            ctx.arc(sx, sy, Math.max(1.5, activeStrokeWidthRef.current * 0.35), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+
+          const newStroke: StrokeEvent = {
+            id: Math.random().toString(36).substr(2, 9),
+            playerId: playerIdRef.current,
+            points: strokePts,
+            brushSize: activeStrokeWidthRef.current,
+            color: hexToRgb(colorRef.current),
+            opacity: 1,
+            timestamp: Date.now()
+          };
+          strokesRef.current.push(newStroke);
+          setHasDrawn(true);
+          onChangeRef.current?.();
+        } else {
+          // Tap stamp dot
+          ctx.beginPath();
+          ctx.arc(anchor.x, anchor.y, activeStrokeWidthRef.current / 2, 0, Math.PI * 2);
+          ctx.fillStyle = colorRef.current;
+          ctx.fill();
+
+          strokesRef.current.push({
+            id: Math.random().toString(36).substr(2, 9),
+            playerId: playerIdRef.current,
+            points: [anchor],
+            brushSize: activeStrokeWidthRef.current,
+            color: hexToRgb(colorRef.current),
+            opacity: 1,
+            timestamp: Date.now()
+          });
+          setHasDrawn(true);
+          onChangeRef.current?.();
+        }
+
+        strokeStartRef.current = null;
+        currentPointsRef.current = [];
+        try {
+          canvas.releasePointerCapture(evt.pointerId);
+        } catch {}
+        return;
       }
 
       if (isOneStrokeRef.current && hasSubmittedRef.current) {
@@ -710,8 +886,14 @@ export function CanvasPad(props: {
           });
         }
 
-        if (isOneStrokeRef.current && canvasRef.current) {
-          performSubmit();
+        if (isOneStrokeRef.current) {
+          if (props.autoSubmitOnOneStroke !== false && canvasRef.current) {
+            performSubmit();
+          } else {
+            hasSubmittedRef.current = true;
+            setHasDrawn(true);
+            onChangeRef.current?.();
+          }
         }
       }
 
@@ -750,6 +932,7 @@ export function CanvasPad(props: {
     strokesRef.current = [];
     delayedQueueRef.current = [];
     hasSubmittedRef.current = false;
+    hideTetherDOM();
     props.onChange?.();
   };
 
@@ -810,21 +993,30 @@ export function CanvasPad(props: {
           }}
         />
 
-        {/* Rubberband visual elastic band */}
-        {rubberbandDisplay && (
-          <svg className="trick-rubberband-tether">
-            <line
-              x1={rubberbandDisplay.x1}
-              y1={rubberbandDisplay.y1}
-              x2={rubberbandDisplay.x2}
-              y2={rubberbandDisplay.y2}
-              stroke="#ec4899"
-              strokeWidth={3}
-              strokeDasharray="4,4"
-            />
-            <circle cx={rubberbandDisplay.x2} cy={rubberbandDisplay.y2} r={6} fill="#ec4899" />
-          </svg>
-        )}
+        {/* Slingshot Pull & Shoot trajectory overlay */}
+        <svg ref={tetherSvgRef} className="trick-rubberband-tether" style={{ display: "none" }}>
+          {/* Aiming trajectory forward laser line */}
+          <line
+            ref={tetherAimLineRef}
+            stroke="#38bdf8"
+            strokeWidth={3}
+            strokeDasharray="6,4"
+          />
+          {/* Pull back tension cord */}
+          <line
+            ref={tetherPullLineRef}
+            stroke="#ec4899"
+            strokeWidth={3.5}
+            strokeDasharray="4,3"
+          />
+          {/* Anchor origin marker */}
+          <circle ref={tetherAnchorCircleRef} r={6} fill="#f43f5e" />
+          {/* Pull handle marker */}
+          <circle ref={tetherPullCircleRef} r={8} fill="#ec4899" />
+          {/* Target landing crosshair */}
+          <circle ref={tetherTargetCircleRef} r={12} fill="none" stroke="#38bdf8" strokeWidth={2.5} strokeDasharray="3,3" />
+          <circle ref={tetherTargetCenterRef} r={3.5} fill="#38bdf8" />
+        </svg>
 
         {isBlind && (
           <div
@@ -861,7 +1053,7 @@ export function CanvasPad(props: {
               pointerEvents: "none"
             }}
           >
-            ⏱️ 1.0s Input Lag
+            ⏱️ 2.0s Input Lag
           </div>
         )}
       </div>
@@ -899,7 +1091,7 @@ export function CanvasPad(props: {
                   {props.trick === "large_brush"
                     ? "35px (Mega)"
                     : props.trick === "pixel_art"
-                    ? "16px (Pixel Grid)"
+                    ? "32px (Chunky Pixel Grid)"
                     : "🎲 Dynamic (Morphing)"}
                 </span>
               )}

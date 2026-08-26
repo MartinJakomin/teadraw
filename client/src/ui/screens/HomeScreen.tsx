@@ -11,6 +11,7 @@ export function HomeScreen(props: {
   error: string;
   onCreate: () => void;
   onJoin: () => void;
+  onPractice: () => void;
 }) {
   const [serverVersion, setServerVersion] = useState<string>(
     import.meta.env.VITE_APP_VERSION || ""
@@ -103,6 +104,34 @@ export function HomeScreen(props: {
               Join Room
             </button>
           </div>
+        </div>
+
+        <div style={{ marginTop: "1.8rem" }}>
+          <button
+            type="button"
+            className="btn"
+            style={{
+              width: "100%",
+              padding: "16px 24px",
+              fontSize: "1.05rem",
+              fontWeight: 800,
+              background: "linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2))",
+              border: "1px solid rgba(168, 85, 247, 0.4)",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "10px",
+              borderRadius: "16px",
+              cursor: "pointer",
+              boxShadow: "0 4px 15px rgba(99, 102, 241, 0.15)",
+              transition: "all 0.2s ease"
+            }}
+            onClick={props.onPractice}
+          >
+            <span style={{ fontSize: "1.3rem" }}>🎨</span>
+            <span>Practice Mode</span>
+          </button>
         </div>
 
         {props.error && (

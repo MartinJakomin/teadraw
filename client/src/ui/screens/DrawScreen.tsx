@@ -42,9 +42,9 @@ export function DrawScreen(props: {
       case "zoom_lens":
         return { icon: "🔍", title: "Magnifying Lens", desc: "Canvas is zoomed in 3x! Draw up close through a moving magnifying lens!" };
       case "rubberband":
-        return { icon: "🪀", title: "Slingshot Brush", desc: "Your brush is tethered to your pointer with bouncy rubberband spring physics!" };
+        return { icon: "🐦", title: "Slingshot Pull & Shoot", desc: "Pull back to aim and release to fire ink shots across the canvas!" };
       case "input_delay":
-        return { icon: "⏱️", title: "1-Second Input Lag", desc: "Extreme latency! All strokes appear with a strict 1-second delay!" };
+        return { icon: "⏱️", title: "2-Second Input Lag", desc: "Extreme latency! All strokes appear with a strict 2-second delay!" };
       case "spinning":
         return { icon: "🎠", title: "Spinning Canvas", desc: "Dizzy carousel! The canvas continuously spins 360° as you draw!" };
       case "glitch":

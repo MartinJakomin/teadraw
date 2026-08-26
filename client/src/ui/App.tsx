@@ -15,6 +15,7 @@ import { VoteResultsScreen } from "./screens/VoteResultsScreen";
 import { GuessScreen } from "./screens/GuessScreen";
 import { RevealFakeScreen } from "./screens/RevealFakeScreen";
 import { TitleScreen } from "./screens/TitleScreen";
+import { PracticeScreen } from "./screens/PracticeScreen";
 import { Sidebar } from "./components/Sidebar";
 import { AvatarScreen } from "./screens/AvatarScreen";
 import { SpectatorBanner } from "./components/SpectatorBanner";
@@ -65,6 +66,7 @@ export function App() {
   const [trick, setTrick] = useState<import("../types").TrickType | undefined>(undefined);
   const [error, setError] = useState<string>("");
   const [socketConnected, setSocketConnected] = useState(socket.connected);
+  const [inPractice, setInPractice] = useState(false);
 
   // Use refs so the reconnect handler always sees current values
   const roomCodeRef = useRef(roomCode);
@@ -165,7 +167,11 @@ export function App() {
   }, [playerId]);
 
   const [flashKey, setFlashKey] = useState(0);
-  const [showTitle, setShowTitle] = useState(true);
+  const [showTitle, setShowTitle] = useState(() => {
+    const hashMatch = window.location.hash.match(/(?:code|room)?=?([A-Za-z0-9]{4})/i);
+    const searchMatch = window.location.search.match(/[?&](?:code|room)=([A-Za-z0-9]{4})/i);
+    return !(hashMatch || searchMatch);
+  });
   const lastPhase = useRef<string | null>(null);
 
   useEffect(() => {
@@ -175,25 +181,34 @@ export function App() {
     }
   }, [room?.phase]);
 
-  const me = room?.players.find((p) => p.id === playerId) ?? null;
-  const isHost = room?.hostId === playerId;
+  const me = useMemo(() => room?.players.find((p) => p.id === playerId), [room, playerId]);
+  const isHost = me ? room?.hostId === me.id : false;
 
   const leave = () => {
-    if (roomCode && playerId) socket.emit("room:leave", { roomCode, playerId });
+    if (room && playerId) {
+      socket.emit("room:leave", { roomCode: room.roomCode, playerId });
+    }
     setRoom(null);
-    setError("");
-    lastPhase.current = null;
+    setRoomCode("");
+    setPlayerId("");
+    save(LS.roomCode, "");
+    save(LS.playerId, "");
+    save(LS.prompt, "");
   };
 
   const kickPlayer = (targetId: string) => {
-    if (roomCode && playerId) {
-      socket.emit("room:kick", { roomCode, playerId, targetId }, (resp: any) => {
+    if (room && playerId) {
+      socket.emit("room:kick", { roomCode: room.roomCode, playerId, targetId }, (resp: any) => {
         if (!resp?.ok) {
           alert(resp?.error ?? "Failed to kick player.");
         }
       });
     }
   };
+
+  if (inPractice) {
+    return <PracticeScreen onExit={() => setInPractice(false)} />;
+  }
 
   if (showTitle) {
     return <TitleScreen onContinue={() => setShowTitle(false)} />;
@@ -223,6 +238,7 @@ export function App() {
             setPlayerId(resp.playerId);
           });
         }}
+        onPractice={() => setInPractice(true)}
       />
     );
   }
@@ -254,6 +270,7 @@ export function App() {
             onToggleSpectator={(ack) => socket.emit("room:toggleSpectator", { roomCode: room.roomCode, playerId }, ack)}
             onLeave={leave}
             onKick={kickPlayer}
+            onPractice={() => setInPractice(true)}
           />
         );
 

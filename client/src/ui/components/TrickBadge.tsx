@@ -25,9 +25,9 @@ export function getTrickDetails(trick?: TrickType) {
     case "zoom_lens":
       return { icon: "🔍", title: "Magnifying Lens", bg: "rgba(56, 189, 248, 0.2)", border: "rgba(56, 189, 248, 0.45)", color: "#38bdf8" };
     case "rubberband":
-      return { icon: "🪀", title: "Slingshot Brush", bg: "rgba(236, 72, 153, 0.2)", border: "rgba(236, 72, 153, 0.45)", color: "#f472b6" };
+      return { icon: "🐦", title: "Slingshot Shoot", bg: "rgba(236, 72, 153, 0.2)", border: "rgba(236, 72, 153, 0.45)", color: "#f472b6" };
     case "input_delay":
-      return { icon: "⏱️", title: "1s Input Lag", bg: "rgba(249, 115, 22, 0.2)", border: "rgba(249, 115, 22, 0.45)", color: "#fb923c" };
+      return { icon: "⏱️", title: "2s Input Lag", bg: "rgba(249, 115, 22, 0.2)", border: "rgba(249, 115, 22, 0.45)", color: "#fb923c" };
     case "spinning":
       return { icon: "🎠", title: "Spinning Canvas", bg: "rgba(168, 85, 247, 0.2)", border: "rgba(168, 85, 247, 0.45)", color: "#d8b4fe" };
     case "glitch":
