@@ -130,7 +130,7 @@ export function AccuseScreen(props: {
                 );
               })}
             </div>
-            <div className="row center" style={{ marginTop: "1.5rem" }}>
+            <div className="row center" style={{ marginTop: "clamp(0.6rem, 1.2vh, 1rem)" }}>
               <button className="btn primary" disabled={!selectedId} onClick={() => props.onVote(selectedId)}>
                 Accuse!
               </button>
@@ -138,7 +138,7 @@ export function AccuseScreen(props: {
           </>
         )}
 
-        <div className="muted small center" style={{ marginTop: "1rem" }}>
+        <div className="muted small center" style={{ marginTop: "clamp(0.4rem, 0.8vh, 0.6rem)" }}>
           Voted: {Object.keys(props.fake.votedForId || {}).length} / {artistIds.length}
         </div>
       </div>

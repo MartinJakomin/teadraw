@@ -35,9 +35,9 @@ export function AvatarScreen(props: {
 
   return (
     <div className="page">
-      <div className="card">
-        <h2 className="title">Draw your Avatar</h2>
-        <div className="muted" style={{ marginBottom: "16px" }}>
+      <div className="card" style={{ maxWidth: "520px", textAlign: "center" }}>
+        <h2 style={{ fontSize: "clamp(1.4rem, 2.2vw, 1.8rem)", marginBottom: "0.25rem" }}>Draw your Avatar</h2>
+        <div className="muted" style={{ marginBottom: "0.75rem", fontSize: "0.875rem" }}>
           Draw yourself using your assigned color and its shades!
         </div>
 

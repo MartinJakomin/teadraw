@@ -256,56 +256,57 @@ export function VoteScreen(props: {
 
   return (
     <div className="page">
-      <div className="card">
+      <div className="card" style={{ padding: "clamp(0.5rem, 1vh, 0.9rem) clamp(0.75rem, 1.2vw, 1.2rem)" }}>
         <div className="row space">
           <div>
-            <h2>Vote</h2>
-            <div className="muted" style={{ marginTop: "8px" }}>
-              Which prompt is the real one? Tap 😂 to award a Comedy Like to your favorite lie!
+            <h2 style={{ margin: 0, fontSize: "clamp(1.15rem, 1.8vw, 1.45rem)" }}>Vote</h2>
+            <div className="muted small" style={{ marginTop: "1px" }}>
+              Which prompt is real? Tap 😂 to like your favorite lie!
             </div>
           </div>
         </div>
 
-        <div className="drawer-info" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "1.2rem 0", flexWrap: "wrap", gap: "10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div className="drawer-info" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "clamp(0.2rem, 0.4vh, 0.35rem) 0", flexWrap: "wrap", gap: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {drawer?.avatarUrl && (
               <img src={drawer.avatarUrl} alt="drawer" className="avatar-small" style={{ border: `2px solid ${drawer.color}` }} />
             )}
-            <div className="muted">
+            <div className="muted" style={{ fontSize: "0.82rem" }}>
               Drawing by <b style={{ color: drawer?.color }}>{drawerName}</b>
             </div>
           </div>
           {currentVote.trick && <TrickBadge trick={currentVote.trick} />}
         </div>
 
-        <img className="img" src={currentVote.imageDataUrl} alt="drawing" />
+        <img className="img" src={currentVote.imageDataUrl} alt="drawing" style={{ margin: "2px auto" }} />
 
         {spectating ? (
-          <div className="muted" style={{ marginTop: "1rem" }}>
+          <div className="muted small" style={{ marginTop: "0.35rem" }}>
             You are spectating — you cannot vote.
           </div>
         ) : isDrawer ? (
           <div
             style={{
-              margin: "1rem 0",
-              padding: "12px 18px",
-              borderRadius: "14px",
+              margin: "0.35rem 0",
+              padding: "6px 12px",
+              borderRadius: "10px",
               background: "rgba(249, 115, 22, 0.15)",
               border: "1px solid rgba(249, 115, 22, 0.4)",
               color: "#fed7aa",
               fontWeight: 700,
-              textAlign: "center"
+              textAlign: "center",
+              fontSize: "0.82rem"
             }}
           >
             🕵️ You drew this! Waiting for others to vote…
           </div>
         ) : alreadyNormal ? (
-          <div className="muted" style={{ textAlign: "center", margin: "1rem 0" }}>
+          <div className="muted small" style={{ textAlign: "center", margin: "0.35rem 0", fontSize: "0.82rem" }}>
             ✅ Vote cast! Waiting for other players…
           </div>
         ) : null}
 
-        <div className="grid">
+        <div className="grid" style={{ gap: "6px", marginTop: "clamp(0.3rem, 0.6vh, 0.5rem)" }}>
           {currentVote.options.map((o) => {
             const isMyClue = o.text === localStorage.getItem("teadraw:myClue");
             const isLiked = likedIds.includes(o.id);
@@ -320,7 +321,7 @@ export function VoteScreen(props: {
                   handleNormalVote(o.id);
                 }}
               >
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1, paddingRight: isMyClue ? 0 : "36px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1px", flex: 1, paddingRight: isMyClue ? 0 : "28px" }}>
                   <span className="vote-option-text">{o.text}</span>
                   {isMyClue && <span className="vote-option-subtext">your lie</span>}
                 </div>
@@ -332,22 +333,22 @@ export function VoteScreen(props: {
                     onClick={(e) => handleToggleLike(e, o.id)}
                     style={{
                       position: "absolute",
-                      top: "8px",
-                      right: "8px",
+                      top: "5px",
+                      right: "5px",
                       background: isLiked ? "rgba(239, 68, 68, 0.25)" : "rgba(255, 255, 255, 0.08)",
                       border: isLiked ? "1px solid rgba(239, 68, 68, 0.6)" : "1px solid rgba(255, 255, 255, 0.15)",
                       borderRadius: "999px",
-                      padding: "4px 8px",
-                      fontSize: "0.85rem",
+                      padding: "2px 5px",
+                      fontSize: "0.75rem",
                       display: "flex",
                       alignItems: "center",
-                      gap: "4px",
+                      gap: "3px",
                       cursor: "pointer",
                       transition: "all 0.15s ease"
                     }}
                   >
                     <span>😂</span>
-                    {isLiked && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#f87171" }}>Liked!</span>}
+                    {isLiked && <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#f87171" }}>Liked!</span>}
                   </button>
                 )}
               </div>
@@ -355,17 +356,14 @@ export function VoteScreen(props: {
           })}
         </div>
 
-        <div style={{ marginTop: "1.5rem" }}>
+        <div style={{ marginTop: "clamp(0.35rem, 0.8vh, 0.6rem)" }}>
           <PlayerOrderStrip
             players={props.room.players}
             orderedPlayerIds={stripIds}
             activePlayerId={currentVote.drawerId}
           />
-          <div className="muted small" style={{ marginTop: "10px", textAlign: "center" }}>
-            Drawing {currentVote.drawingIndex + 1} of {currentVote.totalDrawings}
-          </div>
-          <div className="muted small" style={{ marginTop: "4px", textAlign: "center" }}>
-            Voted: {currentVote.votedBy.length}/{expectedVotes}
+          <div className="muted small" style={{ marginTop: "3px", textAlign: "center", fontSize: "0.72rem" }}>
+            Drawing {currentVote.drawingIndex + 1} of {currentVote.totalDrawings} • Voted: {currentVote.votedBy.length}/{expectedVotes}
           </div>
         </div>
       </div>

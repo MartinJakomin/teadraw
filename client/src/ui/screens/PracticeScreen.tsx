@@ -66,31 +66,31 @@ export function PracticeScreen(props: { onExit: () => void }) {
   };
 
   return (
-    <div className="page center" style={{ minHeight: "100vh", padding: "1.5rem 1rem" }}>
+    <div className="page center" style={{ minHeight: "100vh", padding: "clamp(0.5rem, 1.2vh, 1rem) 1rem" }}>
       <div style={{ maxWidth: "980px", width: "100%" }}>
         {/* Top Control Bar */}
         <div
           className="card"
           style={{
-            marginBottom: "1.2rem",
-            padding: "1rem 1.4rem",
+            marginBottom: "clamp(0.5rem, 1vh, 0.8rem)",
+            padding: "clamp(0.6rem, 1vh, 0.9rem) clamp(0.8rem, 1.2vw, 1.2rem)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             flexWrap: "wrap",
-            gap: "14px"
+            gap: "10px"
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <button
               className="btn"
               onClick={props.onExit}
-              style={{ padding: "8px 16px", fontSize: "0.9rem", fontWeight: 700 }}
+              style={{ padding: "6px 14px", fontSize: "0.85rem", fontWeight: 700 }}
             >
               ← Back
             </button>
             <div>
-              <h2 style={{ margin: 0, fontSize: "1.3rem", display: "flex", alignItems: "center", gap: "8px" }}>
+              <h2 style={{ margin: 0, fontSize: "1.2rem", display: "flex", alignItems: "center", gap: "8px" }}>
                 <span>🎨 Practice Mode</span>
                 {activeTrick && <TrickBadge trick={activeTrick} />}
               </h2>
@@ -111,13 +111,13 @@ export function PracticeScreen(props: { onExit: () => void }) {
                   if (val === "half_time") setSpeedRushKey((k) => k + 1);
                 }}
                 style={{
-                  padding: "8px 14px",
-                  borderRadius: "12px",
+                  padding: "6px 12px",
+                  borderRadius: "10px",
                   background: "rgba(15, 23, 42, 0.8)",
                   color: "#fff",
                   border: "1px solid rgba(255, 255, 255, 0.2)",
                   fontWeight: 700,
-                  fontSize: "0.9rem",
+                  fontSize: "0.85rem",
                   cursor: "pointer"
                 }}
               >
@@ -135,8 +135,8 @@ export function PracticeScreen(props: { onExit: () => void }) {
               type="button"
               onClick={handlePickRandomTrick}
               style={{
-                padding: "8px 14px",
-                fontSize: "0.85rem",
+                padding: "6px 12px",
+                fontSize: "0.8rem",
                 fontWeight: 800,
                 background: "rgba(236, 72, 153, 0.15)",
                 border: "1px solid rgba(236, 72, 153, 0.4)",
@@ -154,23 +154,23 @@ export function PracticeScreen(props: { onExit: () => void }) {
           <div
             className="scale-in"
             style={{
-              marginBottom: "1.2rem",
-              padding: "12px 18px",
-              borderRadius: "16px",
+              marginBottom: "clamp(0.5rem, 1vh, 0.8rem)",
+              padding: "8px 14px",
+              borderRadius: "14px",
               background: activeDetails?.bg ?? "rgba(255, 255, 255, 0.05)",
               border: `1px solid ${activeDetails?.border ?? "rgba(255, 255, 255, 0.15)"}`,
               display: "flex",
               alignItems: "center",
-              gap: "14px",
-              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)"
+              gap: "12px",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.25)"
             }}
           >
-            <span style={{ fontSize: "2rem", lineHeight: 1 }}>{activeDetails?.icon}</span>
+            <span style={{ fontSize: "1.6rem", lineHeight: 1 }}>{activeDetails?.icon}</span>
             <div>
-              <div style={{ fontWeight: 800, fontSize: "1rem", color: activeDetails?.color ?? "#fff" }}>
+              <div style={{ fontWeight: 800, fontSize: "0.95rem", color: activeDetails?.color ?? "#fff" }}>
                 Active Trick: {activeDetails?.title}
               </div>
-              <div style={{ fontSize: "0.85rem", color: "rgba(255, 255, 255, 0.8)", marginTop: "2px" }}>
+              <div style={{ fontSize: "0.8rem", color: "rgba(255, 255, 255, 0.8)", marginTop: "2px" }}>
                 {activeDesc}
               </div>
             </div>
@@ -178,7 +178,7 @@ export function PracticeScreen(props: { onExit: () => void }) {
         )}
 
         {/* Interactive CanvasPad */}
-        <div className="card" style={{ padding: "1.5rem" }}>
+        <div className="card" style={{ padding: "clamp(0.6rem, 1vw, 1rem)" }}>
           <CanvasPad
             key={`${selectedTrick}-${speedRushKey}`}
             playerId="practice-user"

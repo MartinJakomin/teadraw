@@ -286,7 +286,9 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
         const artists = getFakeArtistArtistOrder(r);
         r.activePlayerId = artists[0];
         r.turnNumber = 1;
+        setupPhaseTimer(r);
         emitRoom(r.roomCode);
+        triggerBotActions(r);
       } else if (r.phase === "draw_shared") {
         if (r.activePlayerId !== bot.id) return;
         const x1 = Math.random() * 900;
@@ -329,6 +331,7 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
           const currentArtistIndex = artists.indexOf(bot.id);
           r.activePlayerId = artists[(currentArtistIndex + 1) % artists.length];
         }
+        setupPhaseTimer(r);
         emitRoom(r.roomCode);
         triggerBotActions(r);
       } else if (r.phase === "accuse") {
@@ -366,6 +369,7 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
         const isCorrect = false;
         resolveFakeArtistRound(r, isCorrect);
         r.phase = "reveal_fake";
+        setupPhaseTimer(r);
         emitRoom(r.roomCode);
       }
     }, delay());
@@ -449,7 +453,7 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
     setupPhaseTimer(room);
     triggerBotActions(room);
     emitRoom(room.roomCode);
-  }, durationSeconds * 1000 + 1500); // 1.5s grace period so client auto-submit fires first
+  }, durationSeconds * 1000 + 2500); // 2.5s grace period so client auto-submit fires first cleanly
 }
 
 io.on("connection", (socket) => {

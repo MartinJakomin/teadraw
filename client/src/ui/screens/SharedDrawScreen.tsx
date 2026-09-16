@@ -31,45 +31,42 @@ export function SharedDrawScreen(props: {
       : null;
 
   return (
-    <div className="page">
-      <div className="card" style={{ width: "min(1200px, 100%)" }}>
-        <div className="row space">
-          <div>
-            <h2 style={{ margin: 0 }}>Shared Drawing</h2>
-            <div className="muted">
-              Category: <b>{displayCategory}</b>
+    <div className="page page-shared-draw">
+      <div className="card card-draw-shared">
+        <div className="shared-draw-header">
+          <div className="shared-draw-title-block">
+            <div className="shared-draw-title-row">
+              <h2 className="shared-draw-heading">Shared Canvas</h2>
+              <div className="pill shared-turn-pill">
+                Turn {props.fake.turnNumber} / {totalStrokeSlots}
+              </div>
+            </div>
+            <div className="shared-draw-meta">
+              <span className="shared-category-badge">Category: <b>{displayCategory}</b></span>
             </div>
           </div>
-          <div className="pill">
-            {isActive ? "YOUR TURN" : `Waiting for ${activePlayerName}…`}
+
+          <div className={`pill shared-status-pill ${isActive ? "active-turn" : ""}`}>
+            {isActive ? "🎨 YOUR TURN TO DRAW" : `⏳ Waiting for ${activePlayerName}…`}
           </div>
         </div>
 
-        <div
-          style={{
-            margin: "1.5rem 0",
-            padding: "1rem",
-            background: "rgba(255,255,255,0.05)",
-            borderRadius: "12px",
-            textAlign: "center"
-          }}
-        >
-          <div className="muted small">Your word is:</div>
-          <div
-            style={{
-              fontSize: "2rem",
-              fontWeight: 800,
-              color: isFakeArtist ? "var(--danger)" : "var(--primary2)"
-            }}
-          >
+        {/* Word Card Banner - Compact & Modern */}
+        <div className={`shared-word-banner ${isFakeArtist ? "fake-artist-banner" : ""}`}>
+          <div className="shared-word-label">
+            {isFakeArtist ? "🎭 YOU ARE THE FAKE ARTIST" : "YOUR SECRET WORD"}
+          </div>
+          <div className="shared-word-value">
             {displayWord}
           </div>
-          {isFakeArtist && <div className="muted small">You are the Fake Artist! Try to blend in.</div>}
+          {isFakeArtist && (
+            <div className="shared-word-hint">You do not know the real word! Blend in and pretend you do.</div>
+          )}
         </div>
 
         {spectating && !isQM ? (
-          <div className="muted center" style={{ marginBottom: "1rem" }}>
-            You are spectating — you can watch the canvas update but cannot add strokes.
+          <div className="muted center shared-spectate-msg">
+            You are spectating — you can watch the canvas update live but cannot add strokes.
           </div>
         ) : null}
 
@@ -91,10 +88,7 @@ export function SharedDrawScreen(props: {
           />
         </div>
 
-        <div style={{ marginTop: "1.25rem" }}>
-          <div className="pill" style={{ display: "inline-block", marginBottom: "8px" }}>
-            Turn {props.fake.turnNumber} / {totalStrokeSlots}
-          </div>
+        <div className="shared-order-section">
           <PlayerOrderStrip
             players={props.room.players}
             orderedPlayerIds={doubledOrder}

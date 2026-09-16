@@ -35,13 +35,13 @@ export function LobbyScreen(props: {
     <div className="page">
       <div className="card">
         <div className="row space" style={{ alignItems: "flex-start" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "1.5rem" }}>
-            <h2>Lobby</h2>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-              <span className="muted" style={{ fontSize: "0.9rem", fontWeight: 600 }}>Room code:</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "0.75rem" }}>
+            <h2 style={{ margin: 0 }}>Lobby</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <span className="muted" style={{ fontSize: "0.85rem", fontWeight: 600 }}>Room code:</span>
               <div
                 className="pill room-code-pill"
-                style={{ margin: 0, padding: "8px 18px", cursor: "pointer" }}
+                style={{ margin: 0, padding: "5px 14px", cursor: "pointer", fontSize: "0.95rem" }}
                 onClick={() => {
                   navigator.clipboard.writeText(room.roomCode);
                   setCopiedLink(true);
@@ -53,28 +53,28 @@ export function LobbyScreen(props: {
               </div>
             </div>
             <div className="muted small">
-              Share this code or let friends scan the QR code to join!
+              Share code or scan QR to join!
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             {qrUrl && (
               <div
                 style={{
                   background: "#ffffff",
-                  padding: "6px",
-                  borderRadius: "12px",
+                  padding: "4px",
+                  borderRadius: "10px",
                   boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  gap: "2px",
+                  gap: "1px",
                   textAlign: "center"
                 }}
                 title="Scan with mobile camera to join instantly"
               >
-                <img src={qrUrl} alt="QR Code" style={{ width: "90px", height: "90px", display: "block" }} />
-                <div style={{ color: "#0f172a", fontSize: "0.65rem", fontWeight: 800 }}>SCAN TO JOIN</div>
+                <img src={qrUrl} alt="QR Code" style={{ width: "68px", height: "68px", display: "block" }} />
+                <div style={{ color: "#0f172a", fontSize: "0.6rem", fontWeight: 800 }}>SCAN TO JOIN</div>
               </div>
             )}
             {props.onPractice && (

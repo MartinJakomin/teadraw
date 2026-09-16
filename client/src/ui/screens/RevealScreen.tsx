@@ -199,19 +199,19 @@ export function RevealScreen(props: {
   return (
     <div className="page">
       <div className="card reveal-card">
-        <div className="row space" style={{ marginBottom: "1.5rem" }}>
-          <div className="row" style={{ gap: "12px", flexWrap: "wrap" }}>
+        <div className="row space" style={{ marginBottom: "0.6rem" }}>
+          <div className="row" style={{ gap: "10px", flexWrap: "wrap" }}>
             {drawerAvatar && (
               <img
                 src={drawerAvatar}
                 alt="drawer"
                 className="drawer-avatar-reveal"
-                style={{ border: `3px solid ${drawerColor}` }}
+                style={{ border: `2.5px solid ${drawerColor}` }}
               />
             )}
             <div>
-              <h2 style={{ margin: 0 }}>Reveal</h2>
-              <div className="muted">
+              <h2 style={{ margin: 0, fontSize: "clamp(1.2rem, 2vw, 1.6rem)" }}>Reveal</h2>
+              <div className="muted small">
                 Drawing {props.reveal.drawingIndex + 1} of {props.reveal.totalDrawings} by <b style={{ color: drawerColor }}>{drawerName}</b>
               </div>
             </div>
@@ -222,7 +222,7 @@ export function RevealScreen(props: {
               {nextButtonLabel}
             </button>
           ) : (
-            <div className="muted">Waiting for host…</div>
+            <div className="muted small">Waiting for host…</div>
           )}
         </div>
 
@@ -230,14 +230,14 @@ export function RevealScreen(props: {
           <div className="reveal-main">
             <img className="img reveal-img" src={props.reveal.imageDataUrl} alt="drawing" />
 
-            <div className="prompt reveal-prompt">
-              <div className="muted">The real prompt was</div>
-              <div className="promptText">{props.reveal.prompt}</div>
+            <div className="prompt reveal-prompt" style={{ margin: "clamp(0.25rem, 0.6vh, 0.5rem) 0", padding: "6px 14px" }}>
+              <div className="muted small">The real prompt was</div>
+              <div className="promptText" style={{ fontSize: "clamp(1.1rem, 2vw, 1.5rem)" }}>{props.reveal.prompt}</div>
             </div>
 
             <div className="votes-section">
-              <h3 style={{ marginBottom: "1rem" }}>Votes & Comedy Awards</h3>
-              <div className="list" style={props.reveal.options.length > 4 ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" } : undefined}>
+              <h3 style={{ marginBottom: "0.4rem", fontSize: "1.05rem" }}>Votes & Comedy Awards</h3>
+              <div className="list" style={props.reveal.options.length > 4 ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" } : undefined}>
                 {props.reveal.options.map((o) => {
                   const authorId = o.authorId;
                   const isReal = !authorId;

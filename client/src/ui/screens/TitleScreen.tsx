@@ -8,14 +8,21 @@ export function TitleScreen(props: { onContinue: () => void }) {
           src={logoUrl}
           alt="TeaDraw"
           style={{
-            width: "min(700px, 90vw)",
-            marginBottom: "4rem",
-            filter: "drop-shadow(0 0 40px rgba(255, 255, 255, 0.5))"
+            width: "min(640px, 88vw)",
+            maxHeight: "45vh",
+            objectFit: "contain",
+            marginBottom: "clamp(1.5rem, 3.5vh, 2.5rem)",
+            filter: "drop-shadow(0 0 40px rgba(255, 255, 255, 0.45))"
           }}
         />
         <button
           className="btn primary"
-          style={{ padding: "1.2rem 4rem", fontSize: "1.3rem", borderRadius: "50px", alignSelf: "center" }}
+          style={{
+            padding: "clamp(10px, 1.8vh, 16px) clamp(32px, 5vw, 56px)",
+            fontSize: "clamp(1.05rem, 2vh, 1.3rem)",
+            borderRadius: "50px",
+            alignSelf: "center"
+          }}
           onClick={props.onContinue}
         >
           Enter

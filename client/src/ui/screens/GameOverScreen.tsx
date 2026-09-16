@@ -44,7 +44,7 @@ export function GameOverScreen(props: {
   return (
     <div className="page">
       <div className="card">
-        <div className="row space" style={{ marginBottom: "2rem" }}>
+        <div className="row space" style={{ marginBottom: "clamp(0.6rem, 1.2vh, 1rem)" }}>
           <div>
             <h1 style={{ margin: 0 }}>Game Over</h1>
           </div>
@@ -89,11 +89,11 @@ export function GameOverScreen(props: {
 
         {others.length > 0 && (
           <>
-            <h3 style={{ marginTop: "2rem" }}>Other players</h3>
+            <h3 style={{ marginTop: "clamp(0.75rem, 1.4vh, 1.2rem)", marginBottom: "0.5rem" }}>Other players</h3>
             <div className="list">
               {others.map((p, idx) => (
                 <div key={p.id} className="listItem">
-                  <div className="row" style={{ gap: "12px" }}>
+                  <div className="row" style={{ gap: "10px" }}>
                     <div className="rank">#{idx + 4}</div>
                     {p.avatarUrl && <img src={p.avatarUrl} alt="avatar" className="avatar-small" style={{ border: `2px solid ${p.color}` }} />}
                     <div className="name" style={{ color: p.color }}>{p.name}</div>
@@ -106,27 +106,27 @@ export function GameOverScreen(props: {
         )}
 
         {props.room.accolades && props.room.accolades.length > 0 && (
-          <div style={{ marginTop: "2.5rem" }}>
-            <h3 style={{ marginBottom: "1rem" }}>🏅 Accolades</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "14px" }}>
+          <div style={{ marginTop: "clamp(0.8rem, 1.5vh, 1.3rem)" }}>
+            <h3 style={{ marginBottom: "0.6rem" }}>🏅 Accolades</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px" }}>
               {props.room.accolades.map((a, i) => (
                 <div
                   key={i}
                   className="scale-in"
                   style={{
-                    padding: "16px",
-                    borderRadius: "18px",
+                    padding: "12px 14px",
+                    borderRadius: "14px",
                     background: "rgba(255, 255, 255, 0.04)",
                     border: `1px solid ${a.playerColor}44`,
-                    boxShadow: `0 4px 20px ${a.playerColor}22`,
+                    boxShadow: `0 4px 16px ${a.playerColor}22`,
                     display: "flex",
                     flexDirection: "column",
-                    gap: "8px"
+                    gap: "6px"
                   }}
                 >
-                  <div style={{ fontSize: "2rem" }}>{a.icon}</div>
-                  <div style={{ fontWeight: 900, color: "#fff", fontSize: "1rem", letterSpacing: "0.02em" }}>{a.title}</div>
-                  <div style={{ fontWeight: 700, color: a.playerColor, fontSize: "0.95rem" }}>{a.playerName}</div>
+                  <div style={{ fontSize: "1.6rem" }}>{a.icon}</div>
+                  <div style={{ fontWeight: 900, color: "#fff", fontSize: "0.95rem", letterSpacing: "0.02em" }}>{a.title}</div>
+                  <div style={{ fontWeight: 700, color: a.playerColor, fontSize: "0.9rem" }}>{a.playerName}</div>
                   <div className="muted small">{a.description}</div>
                 </div>
               ))}
@@ -135,8 +135,8 @@ export function GameOverScreen(props: {
         )}
 
         {props.room.gallery && props.room.gallery.length > 0 && (
-          <div style={{ marginTop: "2.5rem" }}>
-            <div className="row space" style={{ marginBottom: "1rem" }}>
+          <div style={{ marginTop: "clamp(0.8rem, 1.5vh, 1.3rem)" }}>
+            <div className="row space" style={{ marginBottom: "0.6rem" }}>
               <h3>🖼️ Match Gallery</h3>
               <button
                 className="btn"
@@ -153,7 +153,7 @@ export function GameOverScreen(props: {
               </button>
             </div>
 
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" }}>
               {props.room.gallery.map((g, i) => (
                 <div
                   key={i}
@@ -161,8 +161,8 @@ export function GameOverScreen(props: {
                   style={{
                     flexDirection: "column",
                     alignItems: "stretch",
-                    padding: "16px",
-                    gap: "12px",
+                    padding: "12px",
+                    gap: "8px",
                     background: "rgba(8, 12, 22, 0.4)"
                   }}
                 >

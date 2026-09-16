@@ -160,31 +160,31 @@ export function DrawScreen(props: {
           <div
             className="scale-in"
             style={{
-              margin: "1rem 0",
-              padding: "12px 20px",
-              borderRadius: "16px",
+              margin: "clamp(0.25rem, 0.6vh, 0.5rem) 0",
+              padding: "6px 14px",
+              borderRadius: "12px",
               background: "linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(139, 92, 246, 0.25))",
               border: "1px solid rgba(236, 72, 153, 0.45)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: "14px",
-              boxShadow: "0 6px 20px rgba(236, 72, 153, 0.2)"
+              gap: "10px",
+              boxShadow: "0 4px 15px rgba(236, 72, 153, 0.2)"
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-              <span style={{ fontSize: "1.8rem" }}>{trickInfo.icon}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "1.4rem" }}>{trickInfo.icon}</span>
               <div>
-                <div style={{ fontWeight: 800, color: "#fff", fontSize: "1.05rem" }}>
+                <div style={{ fontWeight: 800, color: "#fff", fontSize: "0.95rem" }}>
                   ⚡ Random Trick: {trickInfo.title}
                 </div>
-                <div style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.85)" }}>
+                <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.85)" }}>
                   {trickInfo.desc}
                 </div>
               </div>
             </div>
             {props.trick === "half_time" && remainingSeconds !== null && (
-              <div className="trick-timer-pill" style={{ flexShrink: 0 }}>
+              <div className="trick-timer-pill" style={{ flexShrink: 0, padding: "4px 10px", fontSize: "0.9rem" }}>
                 <span>⏳</span>
                 <span>{remainingSeconds}s</span>
               </div>
@@ -192,15 +192,13 @@ export function DrawScreen(props: {
           </div>
         )}
 
-        <div style={{ marginBottom: "1rem" }} />
-
         {spectating ? (
-          <div className="muted" style={{ marginBottom: "1rem" }}>
+          <div className="muted" style={{ margin: "0.5rem 0" }}>
             Spectating — secret prompts are not shown to spectators. Follow who has finished in the sidebar.
           </div>
         ) : (
           <div className="prompt">
-            <div className="muted">Your prompt</div>
+            <div className="muted small">Your prompt</div>
             <div className="promptText">{props.prompt || "Waiting for prompt…"}</div>
           </div>
         )}

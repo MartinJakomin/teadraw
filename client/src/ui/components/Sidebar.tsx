@@ -82,20 +82,37 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
     <div className="sidebar">
       <div style={{
         textAlign: "center",
-        marginBottom: "20px",
-        background: "rgba(255, 255, 255, 0.12)",
-        borderRadius: "20px",
-        padding: "16px",
-        backdropFilter: "blur(10px)",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
-        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)"
+        marginBottom: "10px",
+        background: "rgba(255, 255, 255, 0.08)",
+        borderRadius: "16px",
+        padding: "8px 12px",
+        backdropFilter: "blur(12px)",
+        border: "1px solid rgba(255, 255, 255, 0.08)",
+        boxShadow: "0 6px 20px rgba(0, 0, 0, 0.2)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "75px"
       }}>
-        <img src={logoUrl} alt="TeaDraw Logo" style={{ maxWidth: "240px", width: "100%" }} />
+        <img
+          src={logoUrl}
+          alt="TeaDraw Logo"
+          style={{
+            maxHeight: "68px",
+            maxWidth: "100%",
+            width: "auto",
+            height: "auto",
+            objectFit: "contain",
+            display: "block",
+            margin: "0 auto",
+            filter: "drop-shadow(0 4px 14px rgba(0, 0, 0, 0.35))"
+          }}
+        />
       </div>
-      <div className="sidebar-actions" style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
+      <div className="sidebar-actions" style={{ display: "flex", gap: "8px", marginBottom: "10px", alignItems: "center" }}>
         <button
           className="btn"
-          style={{ flex: 1 }}
+          style={{ flex: 1, padding: "8px 12px", fontSize: "0.85rem" }}
           onClick={() => {
             if (window.confirm("Leave this room?")) {
               props.onLeave?.();
@@ -107,7 +124,7 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
         {isHost && !mePlayer?.isSpectator && room.phase !== "lobby" && (
           <button
             className="btn"
-            style={{ flex: 1 }}
+            style={{ flex: 1, padding: "8px 12px", fontSize: "0.85rem" }}
             onClick={() => {
               if (window.confirm("Stop the current game and return to lobby?")) {
                 props.onStop?.();
@@ -119,8 +136,8 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
         )}
         <div
           style={{
-            width: "10px",
-            height: "10px",
+            width: "8px",
+            height: "8px",
             borderRadius: "50%",
             backgroundColor: "#2ecc71",
             boxShadow: "0 0 8px #2ecc71",
@@ -131,9 +148,9 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
         />
       </div>
 
-      <div className="sidebar-header">
+      <div className="sidebar-header" style={{ paddingBottom: "0.5rem" }}>
         <div>
-          <h3 style={{ marginBottom: "2px" }}>Game Status</h3>
+          <h3 style={{ marginBottom: "2px", fontSize: "1.1rem" }}>Game Status</h3>
           {room.phase !== "lobby" && room.phase !== "game_over" && (
             room.round > room.totalRounds ? (
               <div className="muted small" style={{ color: "#f59e0b", fontWeight: 700 }}>🔥 Final Chaos Round</div>

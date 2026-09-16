@@ -41,7 +41,7 @@ export function RevealFakeScreen(props: {
 
   return (
     <div className="page">
-      <div className="card" style={{ width: "min(1200px, 100%)" }}>
+      <div className="card">
         <div className="row space">
           <div>
             <h1 style={{ color: "var(--primary2)" }}>{resultTitle}</h1>
@@ -56,10 +56,10 @@ export function RevealFakeScreen(props: {
 
         <div className="reveal-content">
            <div className="reveal-main">
-              <div style={{ marginBottom: "2rem", textAlign: "center" }}>
+              <div style={{ marginBottom: "clamp(0.6rem, 1.2vh, 1rem)", textAlign: "center" }}>
                  <img className="img reveal-img" src={props.fake.sharedDrawingUrl} alt="shared drawing" />
                  {props.fake.sharedDrawingUrl && (
-                   <div style={{ marginTop: "12px" }}>
+                   <div style={{ marginTop: "8px" }}>
                      <button
                        className="btn"
                        onClick={() => {
@@ -73,9 +73,9 @@ export function RevealFakeScreen(props: {
                  )}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                  <div className="reveal-sidebar" style={{ height: "fit-content" }}>
-                    <h3 style={{ marginBottom: "1rem" }}>Round Details</h3>
+                    <h3 style={{ marginBottom: "0.5rem" }}>Round Details</h3>
                     <div className="list">
                        <div className="listItem">
                           <div className="muted">Result</div>
@@ -111,17 +111,17 @@ export function RevealFakeScreen(props: {
                  </div>
 
                  <div className="reveal-sidebar" style={{ height: "fit-content" }}>
-                    <h3 style={{ marginBottom: "1rem" }}>Votes Received</h3>
-                    <div className="list" style={props.room.players.length > 4 ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" } : undefined}>
+                    <h3 style={{ marginBottom: "0.5rem" }}>Votes Received</h3>
+                    <div className="list" style={props.room.players.length > 4 ? { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" } : undefined}>
                        {props.room.players.map(p => {
                           const isFake = p.id === props.fake.fakeArtistId;
                           const isQM = p.id === props.fake.questionMasterId;
                           const voters = voteTallies[p.id] || [];
                           
                           return (
-                             <div key={p.id} className="listItem" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "8px" }}>
+                             <div key={p.id} className="listItem" style={{ padding: "0.6rem 0.8rem", display: "flex", flexDirection: "column", gap: "4px" }}>
                                 <div style={{ flex: 1 }}>
-                                   <div className="name" style={{ color: p.color, display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                   <div className="name" style={{ color: p.color, display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                                       {p.name}
                                       {isFake && <span className="tag fake" style={{ fontSize: "0.6rem" }}>FAKE</span>}
                                       {isQM && <span className="tag" style={{ fontSize: "0.6rem", background: "#444" }}>QM</span>}
@@ -132,7 +132,7 @@ export function RevealFakeScreen(props: {
                                    {voters.map(vId => {
                                       const v = props.room.players.find(x => x.id === vId);
                                       return (
-                                         <div key={vId} title={v?.name} style={{ width: "24px", height: "24px", borderRadius: "50%", background: v?.color, border: "2px solid #fff", fontSize: "0.7rem", display: "grid", placeItems: "center", color: "#fff", fontWeight: "bold" }}>
+                                         <div key={vId} title={v?.name} style={{ width: "22px", height: "22px", borderRadius: "50%", background: v?.color, border: "2px solid #fff", fontSize: "0.65rem", display: "grid", placeItems: "center", color: "#fff", fontWeight: "bold" }}>
                                             {v?.name.charAt(0)}
                                          </div>
                                       );
@@ -147,7 +147,7 @@ export function RevealFakeScreen(props: {
            </div>
 
            <div className="reveal-sidebar">
-              <h3 style={{ marginBottom: "1rem" }}>Scoreboard</h3>
+              <h3 style={{ marginBottom: "0.5rem" }}>Scoreboard</h3>
               <div className="list compact">
                  {[...props.room.players].sort((a, b) => b.score - a.score).map(p => {
                     const delta = props.fake.pointsDeltaByPlayer?.[p.id] || 0;

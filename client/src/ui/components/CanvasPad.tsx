@@ -200,14 +200,40 @@ export function CanvasPad(props: {
       hasSubmittedRef.current = false;
       spinStartTimeRef.current = Date.now();
     }
-  }, [props.disabled]);
+  }, [props.disabled, props.endTime]);
 
   // Flush and submit drawing safely
   const performSubmit = () => {
-    if (hasSubmittedRef.current) return;
+    if (hasSubmittedRef.current || disabledRef.current) return;
     hasSubmittedRef.current = true;
     const canvas = canvasRef.current;
     if (canvas) {
+      // If user was mid-drawing when submit fired, flush unfinished points into strokes
+      if (currentPointsRef.current.length > 0) {
+        const effectiveStrokeSize = isRandomBrushRef.current ? currentDynamicSizeRef.current : activeStrokeWidthRef.current;
+        const newStroke: StrokeEvent = {
+          id: Math.random().toString(36).substr(2, 9),
+          playerId: playerIdRef.current,
+          points: [...currentPointsRef.current],
+          brushSize: effectiveStrokeSize,
+          color: hexToRgb(colorRef.current),
+          opacity: 1,
+          timestamp: Date.now()
+        };
+        strokesRef.current.push(newStroke);
+        if (isMirrorRef.current) {
+          strokesRef.current.push({
+            id: Math.random().toString(36).substr(2, 9),
+            playerId: playerIdRef.current,
+            points: currentPointsRef.current.map((pt) => ({ x: canvas.width - pt.x, y: pt.y })),
+            brushSize: effectiveStrokeSize,
+            color: hexToRgb(colorRef.current),
+            opacity: 1,
+            timestamp: Date.now()
+          });
+        }
+        currentPointsRef.current = [];
+      }
       const url = canvas.toDataURL("image/png");
       onSubmitRef.current(url, strokesRef.current);
     }
@@ -215,16 +241,16 @@ export function CanvasPad(props: {
 
   // Auto-submit when timer expires
   useEffect(() => {
-    if (!props.endTime || hasSubmittedRef.current) return;
+    if (!props.endTime || props.disabled || hasSubmittedRef.current) return;
     const check = setInterval(() => {
       const remaining = props.endTime! - Date.now();
-      if (remaining <= 0 && !hasSubmittedRef.current) {
+      if (remaining <= 0 && !hasSubmittedRef.current && !disabledRef.current) {
         clearInterval(check);
         performSubmit();
       }
-    }, 500);
+    }, 150);
     return () => clearInterval(check);
-  }, [props.endTime]);
+  }, [props.endTime, props.disabled]);
 
   const colors = [
     "#000000", "#555555", "#aaaaaa", "#ffffff",
@@ -980,7 +1006,12 @@ export function CanvasPad(props: {
       <div
         ref={containerRef}
         className={`canvasWrap ${isZoom ? "trick-zoom-viewport" : ""}`}
-        style={{ position: "relative", overflow: isSpinning || isZoom ? "hidden" : "visible" }}
+        style={{
+          position: "relative",
+          overflow: isSpinning || isZoom ? "hidden" : "visible",
+          aspectRatio: `${width} / ${height}`,
+          maxWidth: width === height ? "min(320px, calc(100vh - 340px))" : undefined
+        }}
       >
         <canvas
           ref={canvasRef}
@@ -988,6 +1019,7 @@ export function CanvasPad(props: {
           height={height}
           className={`canvas ${isSpinning ? "trick-spinning-canvas" : ""}`}
           style={{
+            aspectRatio: `${width} / ${height}`,
             ...(isBlind ? { opacity: 0.05, filter: "blur(20px)" } : {}),
             ...(isZoom ? { transform: "scale(2.65)", transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`, transition: "transform-origin 0.04s ease-out" } : {})
           }}

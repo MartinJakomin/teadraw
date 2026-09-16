@@ -63,24 +63,25 @@ export function FloatingReactions(props: { socket: Socket; roomCode?: string; pl
               flexDirection: "column",
               alignItems: "center",
               transform: `rotate(${e.rotation}deg)`,
-              animation: "floatUpReaction 2.8s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-              filter: "drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3))",
+              animation: "floatUpReaction 3.2s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+              filter: "drop-shadow(0 6px 16px rgba(0, 0, 0, 0.4))",
               pointerEvents: "none"
             }}
           >
-            <span style={{ fontSize: "2.4rem", lineHeight: 1 }}>{e.emoji}</span>
+            <span style={{ fontSize: "clamp(1.8rem, 2.5vw, 2.3rem)", lineHeight: 1 }}>{e.emoji}</span>
             {e.senderName && (
               <span
                 style={{
                   fontSize: "0.72rem",
                   fontWeight: 700,
-                  background: "rgba(15, 23, 42, 0.85)",
+                  background: "rgba(15, 23, 42, 0.9)",
                   color: "#fff",
-                  padding: "2px 8px",
+                  padding: "1px 8px",
                   borderRadius: "999px",
-                  marginTop: "4px",
+                  marginTop: "3px",
                   whiteSpace: "nowrap",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
                   letterSpacing: "0.02em"
                 }}
               >
@@ -96,19 +97,19 @@ export function FloatingReactions(props: { socket: Socket; roomCode?: string; pl
         <div
           style={{
             position: "fixed",
-            bottom: "14px",
-            left: "14px",
-            maxWidth: "calc(100vw - 28px)",
+            bottom: "16px",
+            left: "16px",
+            maxWidth: "calc(100vw - 32px)",
             zIndex: 9000,
             display: "flex",
             alignItems: "center",
-            gap: "3px",
-            padding: "4px 8px",
+            gap: "5px",
+            padding: "5px 12px",
             borderRadius: "99px",
-            background: "rgba(15, 23, 42, 0.82)",
-            backdropFilter: "blur(14px)",
-            border: "1px solid rgba(255, 255, 255, 0.1)",
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.3)",
+            background: "rgba(15, 23, 42, 0.88)",
+            backdropFilter: "blur(18px)",
+            border: "1px solid rgba(255, 255, 255, 0.16)",
+            boxShadow: "0 6px 20px rgba(0, 0, 0, 0.4)",
             overflowX: "auto",
             scrollbarWidth: "none"
           }}
@@ -120,10 +121,10 @@ export function FloatingReactions(props: { socket: Socket; roomCode?: string; pl
               style={{
                 background: "none",
                 border: "none",
-                fontSize: "1.1rem",
+                fontSize: "clamp(1.3rem, 1.6vw, 1.5rem)",
                 lineHeight: 1,
                 cursor: "pointer",
-                padding: "3px 4px",
+                padding: "4px 6px",
                 borderRadius: "50%",
                 transition: "transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)",
                 display: "flex",

@@ -17,8 +17,8 @@ export function GuessScreen(props: {
         <div className="card">
           <h2>CAUGHT!</h2>
           <div className="muted">{fakeName} was the Fake Artist!</div>
-          <div style={{ margin: "2rem 0", textAlign: "center" }}>
-             <img className="img" src={props.fake.sharedDrawingUrl} alt="shared drawing" style={{ maxWidth: "400px" }} />
+          <div style={{ margin: "clamp(0.5rem, 1.2vh, 1rem) 0", textAlign: "center" }}>
+             <img className="img" src={props.fake.sharedDrawingUrl} alt="shared drawing" style={{ maxWidth: "min(400px, calc((100vh - 360px) * (900 / 550)))" }} />
           </div>
           <div className="muted">They are now trying to guess the secret word for a win…</div>
         </div>
@@ -47,11 +47,11 @@ export function GuessScreen(props: {
         <h2>You were caught!</h2>
         <div className="muted">But you have one last chance. Guess the exact secret word to win!</div>
         
-        <div style={{ margin: "2rem 0", textAlign: "center" }}>
-             <img className="img" src={props.fake.sharedDrawingUrl} alt="shared drawing" style={{ maxWidth: "400px" }} />
+        <div style={{ margin: "clamp(0.5rem, 1.2vh, 1rem) 0", textAlign: "center" }}>
+             <img className="img" src={props.fake.sharedDrawingUrl} alt="shared drawing" style={{ maxWidth: "min(400px, calc((100vh - 360px) * (900 / 550)))" }} />
         </div>
 
-        <div className="field">
+        <div className="field" style={{ margin: "clamp(0.4rem, 1vh, 0.8rem) 0" }}>
           <label>Your guess</label>
           <input 
             value={guess} 

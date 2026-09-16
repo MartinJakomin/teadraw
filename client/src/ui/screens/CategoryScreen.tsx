@@ -65,18 +65,16 @@ export function CategoryScreen(props: {
   return (
     <div className="page">
       <div className="card">
-        <h2>You are the Question Master!</h2>
-        <div className="muted">Choose a category and a secret word. Everyone except the Fake Artist will see them.</div>
+        <h2 style={{ margin: 0, fontSize: "clamp(1.2rem, 2vw, 1.6rem)" }}>You are the Question Master!</h2>
+        <div className="muted small" style={{ marginTop: "2px" }}>Choose a category and secret word for artists to draw.</div>
 
-        <div style={{ marginTop: "1rem", display: "inline-block", padding: "6px 12px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "99px", fontSize: "0.85rem", fontWeight: 700 }}>
+        <div style={{ marginTop: "0.5rem", display: "inline-block", padding: "4px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "99px", fontSize: "0.8rem", fontWeight: 700 }}>
           <span>Word Pack: </span>
           <span style={{ color: "var(--primary2)" }}>{activePackLabel}</span>
         </div>
 
-        <div style={{ marginTop: "1.5rem" }} />
-
-        <div className="field">
-          <label>Category (e.g. Animals)</label>
+        <div className="field" style={{ margin: "clamp(0.4rem, 0.8vh, 0.65rem) 0" }}>
+          <label style={{ fontSize: "0.8rem" }}>Category (e.g. Animals)</label>
           <input
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -85,22 +83,22 @@ export function CategoryScreen(props: {
           />
         </div>
 
-        <div className="field">
-          <label>Secret Word (e.g. Elephant)</label>
+        <div className="field" style={{ margin: "clamp(0.4rem, 0.8vh, 0.65rem) 0" }}>
+          <label style={{ fontSize: "0.8rem" }}>Secret Word (e.g. Elephant)</label>
           <input value={word} onChange={(e) => setWord(e.target.value)} placeholder="Elephant" maxLength={30} />
         </div>
 
-        <div className="row space" style={{ marginTop: "1rem", flexWrap: "wrap", gap: "12px" }}>
-          <button type="button" className="btn btn-spectator-toggle" onClick={randomIdeas}>
-            <span className="btn-toggle-icon">✨</span>
+        <div className="row space" style={{ marginTop: "0.5rem", flexWrap: "wrap", gap: "8px" }}>
+          <button type="button" className="btn btn-spectator-toggle" onClick={randomIdeas} style={{ padding: "6px 14px", fontSize: "0.85rem" }}>
+            <span className="btn-toggle-icon" style={{ fontSize: "1rem" }}>✨</span>
             <span>Get ideas from {activePackLabel}</span>
           </button>
         </div>
 
         {hints && hints.length > 0 ? (
-          <div className="row" style={{ marginTop: "1rem", flexWrap: "wrap", gap: "10px" }}>
+          <div className="row" style={{ marginTop: "0.5rem", flexWrap: "wrap", gap: "6px" }}>
             {hints.map((h, i) => (
-              <button type="button" key={`${h.category}-${h.word}-${i}`} className="btn" onClick={() => applyHint(h)}>
+              <button type="button" key={`${h.category}-${h.word}-${i}`} className="btn" onClick={() => applyHint(h)} style={{ padding: "6px 12px", fontSize: "0.8rem" }}>
                 <span style={{ fontWeight: 700 }}>{h.category}</span>
                 <span className="muted"> / </span>
                 {h.word}
@@ -109,11 +107,11 @@ export function CategoryScreen(props: {
           </div>
         ) : null}
 
-        <div style={{ marginTop: "1.5rem" }} />
-
-        <button className="btn primary" disabled={!category.trim() || !word.trim()} onClick={() => props.onSubmit(category, word)}>
-          Start Drawing
-        </button>
+        <div style={{ marginTop: "0.8rem" }}>
+          <button className="btn primary" disabled={!category.trim() || !word.trim()} onClick={() => props.onSubmit(category, word)}>
+            Start Drawing
+          </button>
+        </div>
       </div>
     </div>
   );

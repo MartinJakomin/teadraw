@@ -23,8 +23,8 @@ export function VoteResultsScreen(props: {
       <div className="card">
         <div className="row space">
           <div>
-            <h1 className="title">Voting Results</h1>
-            <div className="muted">Who suspected whom?</div>
+            <h2 style={{ margin: 0, fontSize: "clamp(1.3rem, 2vw, 1.8rem)" }}>Voting Results</h2>
+            <div className="muted small" style={{ marginTop: "2px" }}>Who suspected whom?</div>
           </div>
           {props.isHost && !props.me.isSpectator ? (
             <button className="btn primary" onClick={props.onContinue}>
@@ -33,18 +33,18 @@ export function VoteResultsScreen(props: {
           ) : null}
         </div>
 
-        <div className="list" style={{ marginTop: "2rem" }}>
+        <div className="list" style={{ marginTop: "0.75rem" }}>
           {players.map(p => {
             const isQM = p.id === props.fake.questionMasterId;
             const isFake = p.id === props.fake.fakeArtistId;
             const voters = voteTallies[p.id] || [];
             
             return (
-              <div key={p.id} className="listItem" style={{ padding: "1.2rem", opacity: isQM ? 0.7 : 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "1rem", flex: 1 }}>
-                   <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: p.color }} />
+              <div key={p.id} className="listItem" style={{ padding: "0.65rem 1rem", opacity: isQM ? 0.7 : 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1 }}>
+                   <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: p.color, flexShrink: 0 }} />
                    <div>
-                      <div className="name" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div className="name" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                         {p.name}
                         {isQM && <span className="tag" style={{ background: "rgba(255,255,255,0.1)", color: "#aaa" }}>QM</span>}
                         {isFake && <span className="tag fake">FAKE ARTIST</span>}
