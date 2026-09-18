@@ -13,15 +13,23 @@ const ALL_TRICKS: Array<{ id: TrickType; name: string }> = [
   { id: "upside_down", name: "🙃 Inverted Controls (Inverted X/Y)" },
   { id: "wobble", name: "〰️ Earthquake Wobble (Tremor Jitter)" },
   { id: "mirror", name: "🪞 Mirror Symmetry (Dual Reflection)" },
-  { id: "ink_limit", name: "🖋️ Ink Budget (2,000px Meter)" },
-  { id: "zoom_lens", name: "🔍 Magnifying Lens (3x Zoom Viewport)" },
+  { id: "ink_limit", name: "🖋️ Ink Budget (4,000px Meter)" },
   { id: "rubberband", name: "🐦 Slingshot (Pull Back & Shoot)" },
-  { id: "input_delay", name: "⏱️ 2-Second Input Lag (Delayed Queue)" },
+  { id: "input_delay", name: "⏱️ 2s Lag + Vanishing Ink" },
   { id: "spinning", name: "🎠 Spinning Canvas (Continuous 360°)" },
   { id: "glitch", name: "👾 Glitch Teleport (Jitter Artifacts)" },
-  { id: "gravity_drip", name: "💧 Gravity Drip (Melting Paint Drops)" },
+  { id: "gravity_drip", name: "💧 Gravity Drip (Heavy Paint Drips)" },
   { id: "pixel_art", name: "🧱 8-Bit Pixel Block (Chunky 32px Grid)" },
-  { id: "bubbles", name: "🫧 Bubble Stamping (Clustered Bubbles)" }
+  { id: "bubbles", name: "🫧 Bubble Stamping (Varied Size Clusters)" },
+  { id: "split_halves", name: "🪓 Guillotine Chop (Random Half Sliced)" },
+  { id: "flashlight", name: "🕯️ Spotlight in the Dark (Cursor Flashlight)" },
+  { id: "ice_skater", name: "🧊 Ice Skater Slide (Smooth Frictionless Gliding)" },
+  { id: "typo_stomp", name: "🔤 Typo Stomp (ASCII Letter Trail)" },
+  { id: "shadow_finger", name: "🌑 Reverse Spotlight (Large Shadow Finger)" },
+  { id: "trash_compactor", name: "🗑️ Trash Compactor (Shrinking Drawing Area)" },
+  { id: "puzzle_jumble", name: "🧩 Puzzle Jumble (All 9 Tiles Shuffled & Numbered)" },
+  { id: "snake_tail", name: "🐍 Snake (Animated Head & Rattle Tail)" },
+  { id: "tractor_beam", name: "🛸 Alien Vaporizer (Periodic Charging Beam)" }
 ];
 
 const TRICK_DESCRIPTIONS: Record<TrickType, string> = {
@@ -33,15 +41,23 @@ const TRICK_DESCRIPTIONS: Record<TrickType, string> = {
   upside_down: "Inverted mouse/touch movement! Moving up draws down, and moving left draws right.",
   wobble: "Chaotic oscillating earthquake tremors are injected into your brush coordinates.",
   mirror: "Draws dual mirrored reflections horizontally across the canvas center line.",
-  ink_limit: "You have a strict 2,000px ink budget. Watch your ink meter gauge closely!",
-  zoom_lens: "Canvas is zoomed in 2.65x in a focused viewport tracking your cursor movement.",
-  rubberband: "Pull back like a slingshot to aim and release to fire ink shots with impact splatter!",
-  input_delay: "All strokes appear on canvas with a strict 2,000ms delay after you draw them.",
+  ink_limit: "You have a strict 3,000px ink budget. Watch your ink meter gauge closely!",
+  rubberband: "Pull back like a slingshot to aim and release to fire curved ballistic ink shots with impact splatter!",
+  input_delay: "Strokes appear on your screen 2 seconds late, stay for 2 seconds, and then vanish from your view!",
   spinning: "The canvas physically rotates 360° continuously while you draw.",
   glitch: "Cyberpunk glitch telemetry randomly teleports and jumps your brush around.",
-  gravity_drip: "Paint drips and melts downward from drawn points with droplet beads at the bottom.",
+  gravity_drip: "Paint drips and melts downward from drawn points with heavier droplets.",
   pixel_art: "Snaps all brush strokes to a chunky retro 32px pixel grid.",
-  bubbles: "Stamps clusters of bubbly translucent circles with bright specular highlights."
+  bubbles: "Stamps sparse clusters of bubbly translucent circles with high size variance.",
+  split_halves: "Guillotine Chop! Upon submitting, a random half of your final drawing will be sliced off!",
+  flashlight: "The canvas is pitch black except for a tight circular spotlight tracking your cursor! Previous strokes remain completely hidden.",
+  ice_skater: "Smooth frictionless ice physics! Gliding momentum and inertia make strokes slide smoothly with inertia!",
+  typo_stomp: "ASCII typewriter! Strokes are stamped as strings of rotating letters, symbols, and emojis.",
+  shadow_finger: "An enlarged pitch-black shadow circle follows under your finger, hiding what you're currently drawing until you move away!",
+  trash_compactor: "Hazard warning! After a 5-second delay, walls slowly compress inward over 60s. Drawing outside open walls is locked, but your existing art stays intact!",
+  puzzle_jumble: "Upon submitting, the canvas is divided into a 3x3 grid of 9 puzzle tiles, shuffled, and labeled with numbered badges (#1-#9) indicating the correct order!",
+  snake_tail: "Your drawing is a single living snake with animated head and rattle tail! When total path length exceeds 3500px, the oldest tail segments are trimmed in real-time as you draw!",
+  tractor_beam: "A UFO patrols overhead, charging up a beam every few seconds to completely vaporize and obliterate all ink beneath it!"
 };
 
 export function PracticeScreen(props: { onExit: () => void }) {
@@ -66,7 +82,18 @@ export function PracticeScreen(props: { onExit: () => void }) {
   };
 
   return (
-    <div className="page center" style={{ minHeight: "100vh", padding: "clamp(0.5rem, 1.2vh, 1rem) 1rem" }}>
+    <div
+      className="page"
+      style={{
+        minHeight: "100vh",
+        width: "100%",
+        justifyContent: "flex-start",
+        alignItems: "center",
+        padding: "clamp(0.75rem, 1.5vh, 1.5rem) 1rem 2.5rem",
+        overflowY: "auto",
+        boxSizing: "border-box"
+      }}
+    >
       <div style={{ maxWidth: "980px", width: "100%" }}>
         {/* Top Control Bar */}
         <div

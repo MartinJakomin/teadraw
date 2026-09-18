@@ -22,8 +22,6 @@ export function getTrickDetails(trick?: TrickType) {
       return { icon: "🪞", title: "Mirror Symmetry", bg: "rgba(6, 182, 212, 0.2)", border: "rgba(6, 182, 212, 0.45)", color: "#22d3ee" };
     case "ink_limit":
       return { icon: "🖋️", title: "Ink Budget", bg: "rgba(168, 85, 247, 0.2)", border: "rgba(168, 85, 247, 0.45)", color: "#c084fc" };
-    case "zoom_lens":
-      return { icon: "🔍", title: "Magnifying Lens", bg: "rgba(56, 189, 248, 0.2)", border: "rgba(56, 189, 248, 0.45)", color: "#38bdf8" };
     case "rubberband":
       return { icon: "🐦", title: "Slingshot Shoot", bg: "rgba(236, 72, 153, 0.2)", border: "rgba(236, 72, 153, 0.45)", color: "#f472b6" };
     case "input_delay":
@@ -38,6 +36,24 @@ export function getTrickDetails(trick?: TrickType) {
       return { icon: "🧱", title: "8-Bit Pixel Block", bg: "rgba(234, 179, 8, 0.2)", border: "rgba(234, 179, 8, 0.45)", color: "#facc15" };
     case "bubbles":
       return { icon: "🫧", title: "Bubble Stamping", bg: "rgba(20, 184, 166, 0.2)", border: "rgba(20, 184, 166, 0.45)", color: "#2dd4bf" };
+    case "split_halves":
+      return { icon: "🪓", title: "Guillotine Split", bg: "rgba(239, 68, 68, 0.2)", border: "rgba(239, 68, 68, 0.45)", color: "#f87171" };
+    case "flashlight":
+      return { icon: "🕯️", title: "Spotlight Dark", bg: "rgba(234, 179, 8, 0.2)", border: "rgba(234, 179, 8, 0.45)", color: "#facc15" };
+    case "ice_skater":
+      return { icon: "🧊", title: "Ice Skater Slide", bg: "rgba(56, 189, 248, 0.2)", border: "rgba(56, 189, 248, 0.45)", color: "#38bdf8" };
+    case "typo_stomp":
+      return { icon: "🔤", title: "Typo Stomp", bg: "rgba(234, 179, 8, 0.2)", border: "rgba(234, 179, 8, 0.45)", color: "#facc15" };
+    case "shadow_finger":
+      return { icon: "🌑", title: "Reverse Spotlight", bg: "rgba(100, 116, 139, 0.2)", border: "rgba(100, 116, 139, 0.45)", color: "#94a3b8" };
+    case "trash_compactor":
+      return { icon: "🗑️", title: "Trash Compactor", bg: "rgba(239, 68, 68, 0.2)", border: "rgba(239, 68, 68, 0.45)", color: "#f87171" };
+    case "puzzle_jumble":
+      return { icon: "🧩", title: "Puzzle Jumble", bg: "rgba(16, 185, 129, 0.2)", border: "rgba(16, 185, 129, 0.45)", color: "#34d399" };
+    case "snake_tail":
+      return { icon: "🐍", title: "Snake", bg: "rgba(34, 197, 94, 0.2)", border: "rgba(34, 197, 94, 0.45)", color: "#4ade80" };
+    case "tractor_beam":
+      return { icon: "🛸", title: "Alien Vaporizer", bg: "rgba(34, 197, 94, 0.2)", border: "rgba(34, 197, 94, 0.45)", color: "#4ade80" };
     default:
       return null;
   }

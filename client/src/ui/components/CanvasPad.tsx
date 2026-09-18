@@ -12,6 +12,9 @@ function getCanvasPos(
   let rawX = (evt.clientX - rect.left) * (canvas.width / rect.width);
   let rawY = (evt.clientY - rect.top) * (canvas.height / rect.height);
 
+  rawX = Math.max(0, Math.min(canvas.width, rawX));
+  rawY = Math.max(0, Math.min(canvas.height, rawY));
+
   if (isSpinning && spinStartTime > 0) {
     const elapsed = (Date.now() - spinStartTime) % 14000;
     const angle = (elapsed / 14000) * 2 * Math.PI;
@@ -24,6 +27,8 @@ function getCanvasPos(
     const sin = Math.sin(-angle);
     rawX = cx + dx * cos - dy * sin;
     rawY = cy + dx * sin + dy * cos;
+    rawX = Math.max(0, Math.min(canvas.width, rawX));
+    rawY = Math.max(0, Math.min(canvas.height, rawY));
   }
 
   return {
@@ -31,6 +36,11 @@ function getCanvasPos(
     y: isUpsideDown ? canvas.height - rawY : rawY
   };
 }
+
+const TYPO_CHARS = [
+  "A", "B", "C", "D", "E", "F", "G", "H", "K", "M", "N", "P", "R", "S", "T", "W", "X", "Y", "Z",
+  "0", "1", "2", "3", "7", "8", "!", "?", "#", "$", "%", "&", "*", "@", "⚡", "✨", "🔥", "☕", "⭐️", "✏️", "❤️"
+];
 
 function hexToRgb(hex: string) {
   const h = hex.replace("#", "").trim();
@@ -58,8 +68,9 @@ export function CanvasPad(props: {
   allowedColor?: string;
   initialColor?: string;
   onColorChange?: (color: string) => void;
-  initialDataUrl?: string;
+  colors?: string[];
   disabled?: boolean;
+  initialDataUrl?: string;
   submitText?: string;
   oneStrokeMode?: boolean;
   autoSubmitOnOneStroke?: boolean;
@@ -73,6 +84,8 @@ export function CanvasPad(props: {
   const isRandomBrush = props.trick === "random_brush";
   const isPixelArt = props.trick === "pixel_art";
   const isBubbles = props.trick === "bubbles";
+  const isSnakeTail = props.trick === "snake_tail";
+  const isTractorBeam = props.trick === "tractor_beam";
   const isSizeLocked = props.trick === "large_brush" || isRandomBrush || isPixelArt;
   const strokeWidth = props.trick === "large_brush" ? 35 : (props.strokeWidth ?? 10);
 
@@ -81,12 +94,18 @@ export function CanvasPad(props: {
   const isUpsideDown = props.trick === "upside_down";
   const isWobble = props.trick === "wobble";
   const isMirror = props.trick === "mirror";
-  const isZoom = props.trick === "zoom_lens";
   const isRubberband = props.trick === "rubberband";
   const isInputDelay = props.trick === "input_delay";
   const isSpinning = props.trick === "spinning";
   const isGlitch = props.trick === "glitch";
   const isGravityDrip = props.trick === "gravity_drip";
+  const isSplitHalves = props.trick === "split_halves";
+  const isFlashlight = props.trick === "flashlight";
+  const isIceSkater = props.trick === "ice_skater";
+  const isTypoStomp = props.trick === "typo_stomp";
+  const isShadowFinger = props.trick === "shadow_finger";
+  const isTrashCompactor = props.trick === "trash_compactor";
+  const isPuzzleJumble = props.trick === "puzzle_jumble";
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -95,16 +114,20 @@ export function CanvasPad(props: {
   const [size, setSize] = useState(strokeWidth);
   const activeStrokeWidth = isSizeLocked ? strokeWidth : size;
 
-  const effectiveInkLimit = props.trick === "ink_limit" ? 2000 : props.inkLimit;
+  const effectiveInkLimit = props.trick === "ink_limit" ? 3000 : props.inkLimit;
   const maxInk = effectiveInkLimit ?? 0;
   const [inkRemaining, setInkRemaining] = useState<number>(maxInk);
   const inkRemainingRef = useRef<number>(maxInk);
 
-  // Zoom lens origin tracking
-  const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
-
   // Spinning canvas reference timestamp
   const spinStartTimeRef = useRef(Date.now());
+
+  // Trash compactor start timestamp & reactive progress (60 seconds)
+  const compactorStartTimeRef = useRef(Date.now());
+  const [compactorProgress, setCompactorProgress] = useState<number>(0);
+
+  // Drawing state ref
+  const drawingRef = useRef<boolean>(false);
 
   // Reset ink whenever it's a new turn
   useEffect(() => {
@@ -139,11 +162,29 @@ export function CanvasPad(props: {
   // Slingshot visual trajectory DOM refs
   const tetherSvgRef = useRef<SVGSVGElement | null>(null);
   const tetherPullLineRef = useRef<SVGLineElement | null>(null);
-  const tetherAimLineRef = useRef<SVGLineElement | null>(null);
+  const tetherAimPathRef = useRef<SVGPathElement | null>(null);
   const tetherAnchorCircleRef = useRef<SVGCircleElement | null>(null);
   const tetherPullCircleRef = useRef<SVGCircleElement | null>(null);
   const tetherTargetCircleRef = useRef<SVGCircleElement | null>(null);
   const tetherTargetCenterRef = useRef<SVGCircleElement | null>(null);
+
+  // UFO Tractor Beam state & DOM
+  const ufoPosRef = useRef<StrokePoint>({ x: 450, y: 36 });
+  const ufoDomRef = useRef<HTMLDivElement | null>(null);
+  const tractorBeamDomRef = useRef<HTMLDivElement | null>(null);
+
+  // Flashlight overlay DOM ref
+  const flashlightOverlayRef = useRef<HTMLDivElement | null>(null);
+
+  // Reverse Spotlight shadow finger overlay DOM ref
+  const shadowOverlayRef = useRef<HTMLDivElement | null>(null);
+
+  // Typo Stomp step accumulator distance
+  const typoDistAccumulatorRef = useRef<number>(0);
+
+  // Ice Skater slippery physics state
+  const icePosRef = useRef<StrokePoint | null>(null);
+  const iceVelRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
 
   // Delayed events queue for 2s Input Lag
   const delayedQueueRef = useRef<Array<{
@@ -153,6 +194,16 @@ export function CanvasPad(props: {
     color: string;
     size: number;
   }>>([]);
+
+  // Vanishing segments for 2s Input Lag + 2s Vanishing display
+  const vanishingSegmentsRef = useRef<Array<{
+    p1: StrokePoint;
+    p2: StrokePoint;
+    color: string;
+    size: number;
+    spawnTime: number;
+  }>>([]);
+  const delayedInProgressPointsRef = useRef<StrokePoint[]>([]);
 
   // Keep live refs
   const colorRef = useRef(color);
@@ -183,6 +234,24 @@ export function CanvasPad(props: {
   isRubberbandRef.current = isRubberband;
   const isInputDelayRef = useRef(isInputDelay);
   isInputDelayRef.current = isInputDelay;
+  const isSplitHalvesRef = useRef(isSplitHalves);
+  isSplitHalvesRef.current = isSplitHalves;
+  const isFlashlightRef = useRef(isFlashlight);
+  isFlashlightRef.current = isFlashlight;
+  const isIceSkaterRef = useRef(isIceSkater);
+  isIceSkaterRef.current = isIceSkater;
+  const isTypoStompRef = useRef(isTypoStomp);
+  isTypoStompRef.current = isTypoStomp;
+  const isShadowFingerRef = useRef(isShadowFinger);
+  isShadowFingerRef.current = isShadowFinger;
+  const isTrashCompactorRef = useRef(isTrashCompactor);
+  isTrashCompactorRef.current = isTrashCompactor;
+  const isPuzzleJumbleRef = useRef(isPuzzleJumble);
+  isPuzzleJumbleRef.current = isPuzzleJumble;
+  const isSnakeTailRef = useRef(isSnakeTail);
+  isSnakeTailRef.current = isSnakeTail;
+  const isTractorBeamRef = useRef(isTractorBeam);
+  isTractorBeamRef.current = isTractorBeam;
 
   const disabledRef = useRef(props.disabled);
   disabledRef.current = props.disabled;
@@ -201,6 +270,211 @@ export function CanvasPad(props: {
       spinStartTimeRef.current = Date.now();
     }
   }, [props.disabled, props.endTime]);
+
+  // Helper to draw cute snake head (with eyes & forked tongue) and tail (rattle beads)
+  const drawSnakeDetails = (
+    ctx: CanvasRenderingContext2D,
+    points: StrokePoint[],
+    snakeColorStr: string,
+    brushSize: number
+  ) => {
+    if (points.length < 2) return;
+
+    // --- DRAW SNAKE HEAD (at the latest / front point) ---
+    const head = points[points.length - 1]!;
+    let prevHead = points[points.length - 2]!;
+    for (let i = points.length - 2; i >= 0; i--) {
+      const d = Math.hypot(head.x - points[i]!.x, head.y - points[i]!.y);
+      if (d >= 3) {
+        prevHead = points[i]!;
+        break;
+      }
+    }
+
+    const headAngle = Math.atan2(head.y - prevHead.y, head.x - prevHead.x);
+    const headScale = Math.max(11, brushSize * 1.05);
+
+    ctx.save();
+    ctx.translate(head.x, head.y);
+    ctx.rotate(headAngle);
+
+    // 1. Red Forked Tongue sticking out front
+    ctx.save();
+    ctx.strokeStyle = "#ef4444";
+    ctx.lineWidth = Math.max(2, headScale * 0.18);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    const tStart = headScale * 0.8;
+    const tMid = tStart + headScale * 0.75;
+    const tFork = headScale * 0.45;
+    ctx.moveTo(tStart, 0);
+    ctx.lineTo(tMid, 0);
+    // Fork tips
+    ctx.moveTo(tMid, 0);
+    ctx.lineTo(tMid + tFork, -headScale * 0.28);
+    ctx.moveTo(tMid, 0);
+    ctx.lineTo(tMid + tFork, headScale * 0.28);
+    ctx.stroke();
+    ctx.restore();
+
+    // 2. Head base shape (cute rounded viper/cobra head)
+    ctx.save();
+    ctx.fillStyle = snakeColorStr;
+    ctx.beginPath();
+    ctx.ellipse(headScale * 0.2, 0, headScale * 1.15, headScale * 0.85, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.28)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // 3. Expressive Eyes
+    const eyeOffsetX = headScale * 0.32;
+    const eyeOffsetY = headScale * 0.52;
+    const eyeRadius = Math.max(3.2, headScale * 0.28);
+    const pupilRadius = Math.max(1.8, eyeRadius * 0.58);
+
+    // Eye Whites
+    ctx.save();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(eyeOffsetX, -eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+    ctx.arc(eyeOffsetX, eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Pupils (looking forward)
+    ctx.fillStyle = "#0f172a";
+    ctx.beginPath();
+    ctx.arc(eyeOffsetX + eyeRadius * 0.32, -eyeOffsetY, pupilRadius, 0, Math.PI * 2);
+    ctx.arc(eyeOffsetX + eyeRadius * 0.32, eyeOffsetY, pupilRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Catchlight shine in eyes
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(eyeOffsetX + eyeRadius * 0.45, -eyeOffsetY - pupilRadius * 0.3, pupilRadius * 0.42, 0, Math.PI * 2);
+    ctx.arc(eyeOffsetX + eyeRadius * 0.45, eyeOffsetY - pupilRadius * 0.3, pupilRadius * 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore(); // Restore head transform
+
+    // --- DRAW SNAKE TAIL (at the oldest / back point) ---
+    const tail = points[0]!;
+    let nextTail = points[1]!;
+    for (let i = 1; i < points.length; i++) {
+      const d = Math.hypot(tail.x - points[i]!.x, tail.y - points[i]!.y);
+      if (d >= 3) {
+        nextTail = points[i]!;
+        break;
+      }
+    }
+
+    const tailAngle = Math.atan2(tail.y - nextTail.y, tail.x - nextTail.x);
+    const tailBaseRadius = Math.max(7, brushSize * 0.75);
+
+    ctx.save();
+    ctx.translate(tail.x, tail.y);
+    ctx.rotate(tailAngle);
+
+    // 3-segment tapered rattle beads
+    const rattleColors = ["#eab308", "#ca8a04", "#a16207"];
+    for (let b = 0; b < 3; b++) {
+      const beadDist = (b + 1) * (tailBaseRadius * 0.88);
+      const beadR = Math.max(2.2, tailBaseRadius * (0.8 - b * 0.22));
+      ctx.fillStyle = rattleColors[b] ?? "#ca8a04";
+      ctx.beginPath();
+      ctx.arc(beadDist, 0, beadR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    ctx.restore(); // Restore tail transform
+  };
+
+  // Helper to cleanly redraw all recorded strokes for full permanent export
+  const redrawAllStrokes = (
+    targetCtx: CanvasRenderingContext2D,
+    targetCanvas: HTMLCanvasElement,
+    allStrokes: StrokeEvent[],
+    currentInProgressPoints?: StrokePoint[]
+  ) => {
+    targetCtx.fillStyle = "#fff";
+    targetCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+    for (const s of allStrokes) {
+      if (s.points.length < 1) continue;
+      targetCtx.lineCap = "round";
+      targetCtx.lineJoin = "round";
+      targetCtx.strokeStyle = `rgb(${s.color.r},${s.color.g},${s.color.b})`;
+      targetCtx.lineWidth = s.brushSize;
+      targetCtx.globalAlpha = s.opacity ?? 1;
+
+      if (s.points.length === 1) {
+        targetCtx.beginPath();
+        targetCtx.arc(s.points[0]!.x, s.points[0]!.y, s.brushSize / 2, 0, Math.PI * 2);
+        targetCtx.fillStyle = `rgb(${s.color.r},${s.color.g},${s.color.b})`;
+        targetCtx.fill();
+      } else {
+        targetCtx.beginPath();
+        targetCtx.moveTo(s.points[0]!.x, s.points[0]!.y);
+        for (let i = 1; i < s.points.length; i++) {
+          targetCtx.lineTo(s.points[i]!.x, s.points[i]!.y);
+        }
+        targetCtx.stroke();
+      }
+    }
+    targetCtx.globalAlpha = 1;
+
+    // Draw current in-progress points if supplied
+    if (currentInProgressPoints && currentInProgressPoints.length > 0) {
+      targetCtx.save();
+      targetCtx.lineCap = "round";
+      targetCtx.lineJoin = "round";
+      targetCtx.strokeStyle = colorRef.current;
+      targetCtx.lineWidth = activeStrokeWidthRef.current;
+      if (currentInProgressPoints.length === 1) {
+        targetCtx.beginPath();
+        targetCtx.arc(currentInProgressPoints[0]!.x, currentInProgressPoints[0]!.y, activeStrokeWidthRef.current / 2, 0, Math.PI * 2);
+        targetCtx.fillStyle = colorRef.current;
+        targetCtx.fill();
+      } else {
+        targetCtx.beginPath();
+        targetCtx.moveTo(currentInProgressPoints[0]!.x, currentInProgressPoints[0]!.y);
+        for (let i = 1; i < currentInProgressPoints.length; i++) {
+          targetCtx.lineTo(currentInProgressPoints[i]!.x, currentInProgressPoints[i]!.y);
+        }
+        targetCtx.stroke();
+      }
+      targetCtx.restore();
+    }
+
+    if (isSnakeTailRef.current) {
+      const allPoints: StrokePoint[] = [];
+      for (const s of allStrokes) {
+        for (const pt of s.points) {
+          allPoints.push(pt);
+        }
+      }
+      if (currentInProgressPoints) {
+        for (const pt of currentInProgressPoints) {
+          allPoints.push(pt);
+        }
+      }
+      if (allPoints.length >= 2) {
+        const lastStroke = allStrokes.length > 0 ? allStrokes[allStrokes.length - 1] : null;
+        const strokeColor = lastStroke
+          ? `rgb(${lastStroke.color.r},${lastStroke.color.g},${lastStroke.color.b})`
+          : colorRef.current;
+        const bSize = lastStroke ? lastStroke.brushSize : activeStrokeWidthRef.current;
+        drawSnakeDetails(targetCtx, allPoints, strokeColor, bSize);
+      }
+    }
+  };
 
   // Flush and submit drawing safely
   const performSubmit = () => {
@@ -234,6 +508,243 @@ export function CanvasPad(props: {
         }
         currentPointsRef.current = [];
       }
+
+      // If input delay mode was active, flush remaining queue items and re-render the full drawing
+      if (isInputDelayRef.current) {
+        if (delayedInProgressPointsRef.current.length > 0) {
+          strokesRef.current.push({
+            id: Math.random().toString(36).substr(2, 9),
+            playerId: playerIdRef.current,
+            points: [...delayedInProgressPointsRef.current],
+            brushSize: activeStrokeWidthRef.current,
+            color: hexToRgb(colorRef.current),
+            opacity: 1,
+            timestamp: Date.now()
+          });
+          delayedInProgressPointsRef.current = [];
+        }
+
+        const queue = delayedQueueRef.current;
+        let delayedCurrentPoints: StrokePoint[] = [];
+        let lastSize = activeStrokeWidthRef.current;
+        let lastColor = colorRef.current;
+
+        for (const item of queue) {
+          lastSize = item.size;
+          lastColor = item.color;
+          if (item.type === "down") {
+            if (delayedCurrentPoints.length > 0) {
+              strokesRef.current.push({
+                id: Math.random().toString(36).substr(2, 9),
+                playerId: playerIdRef.current,
+                points: [...delayedCurrentPoints],
+                brushSize: lastSize,
+                color: hexToRgb(lastColor),
+                opacity: 1,
+                timestamp: Date.now()
+              });
+            }
+            delayedCurrentPoints = [item.p];
+          } else if (item.type === "move") {
+            delayedCurrentPoints.push(item.p);
+          } else if (item.type === "up") {
+            if (delayedCurrentPoints.length > 0) {
+              strokesRef.current.push({
+                id: Math.random().toString(36).substr(2, 9),
+                playerId: playerIdRef.current,
+                points: [...delayedCurrentPoints],
+                brushSize: item.size,
+                color: hexToRgb(item.color),
+                opacity: 1,
+                timestamp: Date.now()
+              });
+              delayedCurrentPoints = [];
+            }
+          }
+        }
+        if (delayedCurrentPoints.length > 0) {
+          strokesRef.current.push({
+            id: Math.random().toString(36).substr(2, 9),
+            playerId: playerIdRef.current,
+            points: [...delayedCurrentPoints],
+            brushSize: lastSize,
+            color: hexToRgb(lastColor),
+            opacity: 1,
+            timestamp: Date.now()
+          });
+        }
+        delayedQueueRef.current = [];
+
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          redrawAllStrokes(ctx, canvas, strokesRef.current);
+        }
+      }
+
+      // Guillotine Chop: Randomly slice off a plane (half) of the final image upon submission
+      if (isSplitHalvesRef.current) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const plane = Math.floor(Math.random() * 6);
+          const w = canvas.width;
+          const h = canvas.height;
+
+          ctx.save();
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#ef4444";
+          ctx.lineWidth = 4;
+          ctx.lineCap = "round";
+
+          if (plane === 0) {
+            // Left Half Chopped (X < w / 2)
+            ctx.fillRect(0, 0, w / 2, h);
+            ctx.beginPath();
+            ctx.moveTo(w / 2, 0);
+            ctx.lineTo(w / 2, h);
+            ctx.stroke();
+          } else if (plane === 1) {
+            // Right Half Chopped (X > w / 2)
+            ctx.fillRect(w / 2, 0, w / 2, h);
+            ctx.beginPath();
+            ctx.moveTo(w / 2, 0);
+            ctx.lineTo(w / 2, h);
+            ctx.stroke();
+          } else if (plane === 2) {
+            // Top Half Chopped (Y < h / 2)
+            ctx.fillRect(0, 0, w, h / 2);
+            ctx.beginPath();
+            ctx.moveTo(0, h / 2);
+            ctx.lineTo(w, h / 2);
+            ctx.stroke();
+          } else if (plane === 3) {
+            // Bottom Half Chopped (Y > h / 2)
+            ctx.fillRect(0, h / 2, w, h / 2);
+            ctx.beginPath();
+            ctx.moveTo(0, h / 2);
+            ctx.lineTo(w, h / 2);
+            ctx.stroke();
+          } else if (plane === 4) {
+            // Top-Left Diagonal Half Chopped
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(w, 0);
+            ctx.lineTo(0, h);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(w, 0);
+            ctx.lineTo(0, h);
+            ctx.stroke();
+          } else {
+            // Bottom-Right Diagonal Half Chopped
+            ctx.beginPath();
+            ctx.moveTo(w, 0);
+            ctx.lineTo(w, h);
+            ctx.lineTo(0, h);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(w, 0);
+            ctx.lineTo(0, h);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+
+      // Puzzle Jumble: Full 3x3 (9 tiles) scramble with numbered badges indicating original order
+      if (isPuzzleJumbleRef.current) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const w = canvas.width;
+          const h = canvas.height;
+          const rows = 3;
+          const cols = 3;
+          const tw = w / cols;
+          const th = h / rows;
+          const tempCanvas = document.createElement("canvas");
+          tempCanvas.width = w;
+          tempCanvas.height = h;
+          const tempCtx = tempCanvas.getContext("2d");
+          if (tempCtx) {
+            tempCtx.drawImage(canvas, 0, 0);
+
+            // Generate a full random permutation of all 9 tiles (0..8)
+            const perm = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+            for (let i = perm.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              const temp = perm[i]!;
+              perm[i] = perm[j]!;
+              perm[j] = temp;
+            }
+            if (perm.every((val, idx) => val === idx)) {
+              const temp = perm[0]!;
+              perm[0] = perm[1]!;
+              perm[1] = temp;
+            }
+
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, w, h);
+
+            for (let d = 0; d < 9; d++) {
+              const srcIndex = perm[d]!;
+              const srcR = Math.floor(srcIndex / cols);
+              const srcC = srcIndex % cols;
+              const dstR = Math.floor(d / cols);
+              const dstC = d % cols;
+
+              const sx = srcC * tw;
+              const sy = srcR * th;
+              const dx = dstC * tw;
+              const dy = dstR * th;
+
+              ctx.drawImage(tempCanvas, sx, sy, tw, th, dx, dy, tw, th);
+
+              // Stamp badge with original correct tile number (#1 to #9)
+              ctx.save();
+              const badgeX = dx + 10;
+              const badgeY = dy + 10;
+              const badgeSize = 28;
+
+              ctx.fillStyle = "rgba(15, 23, 42, 0.90)";
+              ctx.beginPath();
+              if (ctx.roundRect) {
+                ctx.roundRect(badgeX, badgeY, badgeSize, badgeSize, 6);
+              } else {
+                ctx.rect(badgeX, badgeY, badgeSize, badgeSize);
+              }
+              ctx.fill();
+              ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+              ctx.lineWidth = 1.5;
+              ctx.stroke();
+
+              ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillStyle = "#ffffff";
+              ctx.fillText(String(srcIndex + 1), badgeX + badgeSize / 2, badgeY + badgeSize / 2);
+              ctx.restore();
+            }
+
+            // Draw clean puzzle cut grid lines
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+            ctx.lineWidth = 2.5;
+            for (let c = 1; c < cols; c++) {
+              ctx.beginPath();
+              ctx.moveTo(c * tw, 0);
+              ctx.lineTo(c * tw, h);
+              ctx.stroke();
+            }
+            for (let r = 1; r < rows; r++) {
+              ctx.beginPath();
+              ctx.moveTo(0, r * th);
+              ctx.lineTo(w, r * th);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
       const url = canvas.toDataURL("image/png");
       onSubmitRef.current(url, strokesRef.current);
     }
@@ -314,13 +825,25 @@ export function CanvasPad(props: {
     }
   }, [props.initialDataUrl]);
 
-  // Helper to draw bubbles stamp (small clustered bubbles)
+  // Helper to get open compactor bounding box inside shrinking walls
+  const getCompactorBounds = (w: number, h: number, progress: number) => {
+    if (progress <= 0) return { minX: 0, maxX: w, minY: 0, maxY: h };
+    const wallPercent = Math.min(0.485, progress * 0.485);
+    return {
+      minX: w * wallPercent,
+      maxX: w * (1 - wallPercent),
+      minY: h * wallPercent,
+      maxY: h * (1 - wallPercent)
+    };
+  };
+
+  // Helper to draw bubbles stamp (compact bubble clusters with high variance)
   const drawBubbleCluster = (ctx: CanvasRenderingContext2D, center: StrokePoint, bubbleColor: string) => {
-    const count = Math.floor(Math.random() * 4) + 3;
+    const count = Math.floor(Math.random() * 3) + 1; // 1 to 3 bubbles
     for (let i = 0; i < count; i++) {
-      const radius = Math.floor(Math.random() * 7) + 3; // 3px to 9px small bubbles
-      const offsetX = (Math.random() - 0.5) * 22;
-      const offsetY = (Math.random() - 0.5) * 22;
+      const radius = Math.floor(Math.random() * 10) + 3; // 3px to 13px compact size
+      const offsetX = (Math.random() - 0.5) * 18;
+      const offsetY = (Math.random() - 0.5) * 18;
       const bx = center.x + offsetX;
       const by = center.y + offsetY;
 
@@ -329,33 +852,27 @@ export function CanvasPad(props: {
       ctx.arc(bx, by, radius, 0, Math.PI * 2);
       ctx.fillStyle = bubbleColor + "55"; // translucent
       ctx.fill();
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = Math.max(1.2, radius * 0.12);
       ctx.strokeStyle = bubbleColor;
       ctx.stroke();
 
       // Specular white highlight on bubble
       ctx.beginPath();
-      ctx.arc(bx - radius * 0.35, by - radius * 0.35, Math.max(0.8, radius * 0.25), 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.arc(bx - radius * 0.35, by - radius * 0.35, Math.max(1.0, radius * 0.28), 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
       ctx.fill();
       ctx.restore();
     }
   };
 
-  // Helper to draw gravity paint drip (wide fan spread with high size variance)
+  // Helper to draw gravity paint drip (heavy, thick dripping streams)
   const drawGravityDrip = (ctx: CanvasRenderingContext2D, point: StrokePoint, dripColor: string) => {
-    const streamCount = Math.random() < 0.6 ? 1 : Math.floor(Math.random() * 2) + 2;
+    const streamCount = Math.random() < 0.5 ? 1 : 2;
     for (let s = 0; s < streamCount; s++) {
-      const spreadAngle = (Math.random() - 0.5) * (Math.PI * 0.65); // -55 to +55 deg spread
-      const lengthTier = Math.random();
-      const dripLen = lengthTier < 0.35
-        ? Math.floor(Math.random() * 22) + 10 // Short stubby dribbles
-        : lengthTier < 0.75
-        ? Math.floor(Math.random() * 45) + 35 // Medium runs
-        : Math.floor(Math.random() * 45) + 75; // Giant dramatic drippers
-
-      const dripWidth = Math.max(1.5, activeStrokeWidthRef.current * (0.22 + Math.random() * 0.85));
-      const endX = point.x + Math.sin(spreadAngle) * (dripLen * 0.7);
+      const spreadAngle = (Math.random() - 0.5) * (Math.PI * 0.5);
+      const dripLen = Math.floor(Math.random() * 75) + 35; // 35px to 110px
+      const dripWidth = Math.max(4, activeStrokeWidthRef.current * (0.6 + Math.random() * 0.7)); // thicker drips
+      const endX = point.x + Math.sin(spreadAngle) * (dripLen * 0.5);
       const endY = point.y + Math.cos(spreadAngle) * dripLen;
 
       ctx.save();
@@ -366,21 +883,21 @@ export function CanvasPad(props: {
 
       ctx.beginPath();
       ctx.moveTo(point.x, point.y);
-      const midX = (point.x + endX) / 2 + (Math.random() - 0.5) * 12;
+      const midX = (point.x + endX) / 2 + (Math.random() - 0.5) * 8;
       const midY = (point.y + endY) / 2;
       ctx.quadraticCurveTo(midX, midY, endX, endY);
       ctx.stroke();
 
       // Droplet bead at tip
       ctx.beginPath();
-      ctx.arc(endX, endY, dripWidth * 1.2, 0, Math.PI * 2);
+      ctx.arc(endX, endY, dripWidth * 1.4, 0, Math.PI * 2);
       ctx.fill();
 
-      // Detached falling splatter drop
-      if (Math.random() < 0.45) {
-        const fallDist = Math.floor(Math.random() * 22) + 12;
+      // Heavy falling splatter drop
+      if (Math.random() < 0.55) {
+        const fallDist = Math.floor(Math.random() * 28) + 14;
         ctx.beginPath();
-        ctx.arc(endX + Math.sin(spreadAngle) * fallDist, endY + Math.cos(spreadAngle) * fallDist, dripWidth * 0.75, 0, Math.PI * 2);
+        ctx.arc(endX + Math.sin(spreadAngle) * fallDist, endY + Math.cos(spreadAngle) * fallDist, dripWidth * 0.9, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -399,14 +916,56 @@ export function CanvasPad(props: {
     ctx.restore();
   };
 
-  // Direct DOM Slingshot trajectory updater (zero React re-renders)
+  // Helper to trim snake strokes in real-time across committed and in-progress strokes
+  const trimSnakeToLength = (strokes: StrokeEvent[], currentPoints: StrokePoint[], maxTotalLength = 3500) => {
+    let totalLength = 0;
+    for (const s of strokes) {
+      for (let i = 1; i < s.points.length; i++) {
+        totalLength += Math.hypot(s.points[i]!.x - s.points[i - 1]!.x, s.points[i]!.y - s.points[i - 1]!.y);
+      }
+    }
+    for (let i = 1; i < currentPoints.length; i++) {
+      totalLength += Math.hypot(currentPoints[i]!.x - currentPoints[i - 1]!.x, currentPoints[i]!.y - currentPoints[i - 1]!.y);
+    }
+    if (totalLength <= maxTotalLength) return false;
+
+    let modified = false;
+    while (totalLength > maxTotalLength) {
+      if (strokes.length > 0) {
+        const oldestStroke = strokes[0]!;
+        if (oldestStroke.points.length <= 1) {
+          strokes.shift();
+          modified = true;
+          continue;
+        }
+        const p0 = oldestStroke.points[0]!;
+        const p1 = oldestStroke.points[1]!;
+        const segDist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+        oldestStroke.points.shift();
+        totalLength -= segDist;
+        modified = true;
+      } else if (currentPoints.length > 1) {
+        const p0 = currentPoints[0]!;
+        const p1 = currentPoints[1]!;
+        const segDist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+        currentPoints.shift();
+        totalLength -= segDist;
+        modified = true;
+      } else {
+        break;
+      }
+    }
+    return modified;
+  };
+
+  // Direct DOM Slingshot trajectory updater with curved ballistic arc preview
   const updateSlingshotDOM = (anchor: StrokePoint, pull: StrokePoint) => {
     const canvas = canvasRef.current;
     if (
       !canvas ||
       !tetherSvgRef.current ||
       !tetherPullLineRef.current ||
-      !tetherAimLineRef.current ||
+      !tetherAimPathRef.current ||
       !tetherAnchorCircleRef.current ||
       !tetherPullCircleRef.current ||
       !tetherTargetCircleRef.current ||
@@ -424,7 +983,7 @@ export function CanvasPad(props: {
     const dy = pull.y - anchor.y;
     const pullDist = Math.hypot(dx, dy);
 
-    // Calculate opposite firing vector
+    // Calculate opposite firing vector with ballistic gravity drop
     const flingPower = Math.min(320, pullDist * 2.2);
     const angle = Math.atan2(-dy, -dx);
     const targetX = Math.max(10, Math.min(canvas.width - 10, anchor.x + Math.cos(angle) * flingPower));
@@ -432,6 +991,10 @@ export function CanvasPad(props: {
 
     const tx = (targetX / canvas.width) * rect.width;
     const ty = (targetY / canvas.height) * rect.height;
+
+    const midX = (ax + tx) / 2;
+    const curveDrop = Math.min(55, pullDist * 0.22) * (rect.height / canvas.height);
+    const midY = (ay + ty) / 2 + curveDrop;
 
     tetherSvgRef.current.style.display = "block";
 
@@ -441,11 +1004,8 @@ export function CanvasPad(props: {
     tetherPullLineRef.current.setAttribute("x2", String(px));
     tetherPullLineRef.current.setAttribute("y2", String(py));
 
-    // 2. Aiming trajectory laser line
-    tetherAimLineRef.current.setAttribute("x1", String(ax));
-    tetherAimLineRef.current.setAttribute("y1", String(ay));
-    tetherAimLineRef.current.setAttribute("x2", String(tx));
-    tetherAimLineRef.current.setAttribute("y2", String(ty));
+    // 2. Aiming trajectory ballistic curved path
+    tetherAimPathRef.current.setAttribute("d", `M ${ax} ${ay} Q ${midX} ${midY} ${tx} ${ty}`);
 
     // 3. Anchor & Pull markers
     tetherAnchorCircleRef.current.setAttribute("cx", String(ax));
@@ -466,7 +1026,25 @@ export function CanvasPad(props: {
     }
   };
 
-  // Real-time animation loop for 2s Input Delay Dequeue
+  // Direct DOM Flashlight spotlight updater (zero React re-renders)
+  const updateFlashlightDOM = (clientX: number, clientY: number) => {
+    if (!flashlightOverlayRef.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const fx = clientX - rect.left;
+    const fy = clientY - rect.top;
+    flashlightOverlayRef.current.style.background = `radial-gradient(circle 65px at ${fx}px ${fy}px, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 42px, rgba(0,0,0,0.92) 58px, #000000 65px, #000000 100%)`;
+  };
+
+  // Direct DOM Reverse Spotlight shadow finger updater (enlarged dark eclipse circle)
+  const updateShadowDOM = (clientX: number, clientY: number) => {
+    if (!shadowOverlayRef.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const fx = clientX - rect.left;
+    const fy = clientY - rect.top;
+    shadowOverlayRef.current.style.background = `radial-gradient(circle 165px at ${fx}px ${fy}px, #000000 0%, #000000 135px, rgba(0,0,0,0.85) 150px, rgba(0,0,0,0) 165px)`;
+  };
+
+  // Real-time animation loop for 2s Input Delay + Vanishing Ink, Helium Drift & Trash Compactor
   useEffect(() => {
     let animId: number;
 
@@ -474,48 +1052,193 @@ export function CanvasPad(props: {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext("2d");
 
-      if (isInputDelayRef.current && canvas && ctx) {
+      // Trash Compactor: 5-second delay before starting, then smooth 60s shrink of available drawing boundary
+      if (isTrashCompactorRef.current && !hasSubmittedRef.current && canvas && ctx) {
+        const elapsed = Date.now() - compactorStartTimeRef.current;
+        const progress = elapsed < 5000 ? 0 : Math.min(1, (elapsed - 5000) / 60000);
+        setCompactorProgress(progress);
+      }
+
+      // Alien Vaporizer Beam: Charges up every few seconds and completely removes all ink/area in the beam
+      if (isTractorBeamRef.current && !hasSubmittedRef.current && canvas) {
+        const t = Date.now();
+        const cycle = t % 4200; // 4.2s cycle
+        const isCharging = cycle >= 2200 && cycle < 3200;
+        const isFiring = cycle >= 3200 && cycle < 3800;
+
+        if (!isCharging && !isFiring) {
+          // Patrol movement
+          const ufoX = canvas.width / 2 + Math.sin(t / 1100) * (canvas.width * 0.38);
+          ufoPosRef.current = { x: ufoX, y: 36 };
+        }
+
+        const ufoX = ufoPosRef.current.x;
+        const ufoY = ufoPosRef.current.y;
+
+        if (ufoDomRef.current && tractorBeamDomRef.current && containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          const screenX = (ufoX / canvas.width) * rect.width;
+          const screenY = (ufoY / canvas.height) * rect.height;
+
+          ufoDomRef.current.style.transform = `translate(${screenX - 32}px, ${screenY - 24}px)`;
+
+          if (isFiring) {
+            // Intense vertical disintegrator laser column
+            const beamW = (130 / canvas.width) * rect.width;
+            tractorBeamDomRef.current.style.transform = `translate(${screenX - beamW / 2}px, ${screenY + 12}px)`;
+            tractorBeamDomRef.current.style.width = `${beamW}px`;
+            tractorBeamDomRef.current.style.height = `${rect.height - screenY - 12}px`;
+            tractorBeamDomRef.current.style.clipPath = "none";
+            tractorBeamDomRef.current.style.background = "linear-gradient(to bottom, #ffffff 0%, rgba(56, 189, 248, 0.95) 30%, rgba(34, 197, 94, 0.8) 100%)";
+            tractorBeamDomRef.current.style.boxShadow = "0 0 45px rgba(56, 189, 248, 0.95), inset 0 0 20px #fff";
+            tractorBeamDomRef.current.style.opacity = "1";
+            ufoDomRef.current.style.filter = "drop-shadow(0 0 25px #38bdf8)";
+          } else if (isCharging) {
+            // Flashing warning beam
+            const beamHalf = (80 / canvas.width) * rect.width;
+            tractorBeamDomRef.current.style.transform = `translate(${screenX - beamHalf}px, ${screenY + 12}px)`;
+            tractorBeamDomRef.current.style.width = `${beamHalf * 2}px`;
+            tractorBeamDomRef.current.style.height = `${rect.height - screenY - 12}px`;
+            tractorBeamDomRef.current.style.clipPath = "polygon(40% 0%, 60% 0%, 100% 100%, 0% 100%)";
+            const flash = (t % 200) < 100;
+            tractorBeamDomRef.current.style.background = flash
+              ? "linear-gradient(to bottom, rgba(239, 68, 68, 0.75) 0%, rgba(249, 115, 22, 0.35) 100%)"
+              : "linear-gradient(to bottom, rgba(239, 68, 68, 0.3) 0%, rgba(249, 115, 22, 0.1) 100%)";
+            tractorBeamDomRef.current.style.boxShadow = "0 0 30px rgba(239, 68, 68, 0.8)";
+            tractorBeamDomRef.current.style.opacity = "1";
+            ufoDomRef.current.style.filter = "drop-shadow(0 0 20px #ef4444)";
+          } else {
+            // Calm scanning cone
+            const beamHalf = (90 / canvas.width) * rect.width;
+            tractorBeamDomRef.current.style.transform = `translate(${screenX - beamHalf}px, ${screenY + 12}px)`;
+            tractorBeamDomRef.current.style.width = `${beamHalf * 2}px`;
+            tractorBeamDomRef.current.style.height = `${rect.height - screenY - 12}px`;
+            tractorBeamDomRef.current.style.clipPath = "polygon(40% 0%, 60% 0%, 100% 100%, 0% 100%)";
+            tractorBeamDomRef.current.style.background = "linear-gradient(to bottom, rgba(74, 222, 128, 0.35) 0%, rgba(34, 197, 94, 0.1) 85%, rgba(34, 197, 94, 0) 100%)";
+            tractorBeamDomRef.current.style.boxShadow = "0 0 20px rgba(74, 222, 128, 0.4)";
+            tractorBeamDomRef.current.style.opacity = "0.75";
+            ufoDomRef.current.style.filter = "drop-shadow(0 0 14px rgba(74, 222, 128, 0.8))";
+          }
+        }
+
+        // Disintegrate & split strokes across beam during firing phase
+        if (isFiring && ctx) {
+          const beamLeft = ufoX - 65;
+          const beamRight = ufoX + 65;
+          let modified = false;
+          const nextStrokes: StrokeEvent[] = [];
+
+          for (const s of strokesRef.current) {
+            let curChunk: StrokePoint[] = [];
+            for (const pt of s.points) {
+              if (pt.x >= beamLeft && pt.x <= beamRight) {
+                if (curChunk.length > 0) {
+                  nextStrokes.push({ ...s, id: Math.random().toString(36).substr(2, 9), points: curChunk });
+                  curChunk = [];
+                }
+                modified = true;
+              } else {
+                curChunk.push(pt);
+              }
+            }
+            if (curChunk.length > 0) {
+              if (modified) {
+                nextStrokes.push({ ...s, id: Math.random().toString(36).substr(2, 9), points: curChunk });
+              } else {
+                nextStrokes.push(s);
+              }
+            }
+          }
+
+          if (currentPointsRef.current.length > 0) {
+            const beforeLen = currentPointsRef.current.length;
+            currentPointsRef.current = currentPointsRef.current.filter((pt) => pt.x < beamLeft || pt.x > beamRight);
+            if (currentPointsRef.current.length !== beforeLen) {
+              modified = true;
+            }
+          }
+
+          if (modified) {
+            strokesRef.current = nextStrokes;
+            redrawAllStrokes(ctx, canvas, strokesRef.current);
+          }
+
+          // Visual clear of the vaporized beam column on canvas
+          ctx.save();
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(beamLeft, 0, beamRight - beamLeft, canvas.height);
+          ctx.restore();
+        }
+      }
+
+      if (isInputDelayRef.current && canvas && ctx && !hasSubmittedRef.current) {
         const now = Date.now();
         const queue = delayedQueueRef.current;
 
+        // Process queue items that have reached 2000ms delay
         while (queue.length > 0 && now - queue[0]!.time >= 2000) {
           const item = queue.shift()!;
-          ctx.lineCap = "round";
-          ctx.lineJoin = "round";
-          ctx.strokeStyle = item.color;
-          ctx.lineWidth = item.size;
 
           if (item.type === "down") {
-            currentPointsRef.current = [item.p];
-            strokeStartRef.current = item.p;
-            strokeMovedRef.current = false;
+            delayedInProgressPointsRef.current = [item.p];
           } else if (item.type === "move") {
-            const prev = currentPointsRef.current[currentPointsRef.current.length - 1];
-            currentPointsRef.current.push(item.p);
+            const prev = delayedInProgressPointsRef.current[delayedInProgressPointsRef.current.length - 1];
+            delayedInProgressPointsRef.current.push(item.p);
             if (prev) {
-              ctx.beginPath();
-              ctx.moveTo(prev.x, prev.y);
-              ctx.lineTo(item.p.x, item.p.y);
-              ctx.stroke();
+              vanishingSegmentsRef.current.push({
+                p1: prev,
+                p2: item.p,
+                color: item.color,
+                size: item.size,
+                spawnTime: item.time
+              });
             }
             setHasDrawn(true);
             onChangeRef.current?.();
           } else if (item.type === "up") {
-            if (currentPointsRef.current.length > 0) {
+            if (delayedInProgressPointsRef.current.length > 0) {
               const newStroke: StrokeEvent = {
                 id: Math.random().toString(36).substr(2, 9),
                 playerId: playerIdRef.current,
-                points: [...currentPointsRef.current],
+                points: [...delayedInProgressPointsRef.current],
                 brushSize: item.size,
                 color: hexToRgb(item.color),
                 opacity: 1,
                 timestamp: Date.now()
               };
               strokesRef.current.push(newStroke);
-              currentPointsRef.current = [];
+              delayedInProgressPointsRef.current = [];
             }
           }
         }
+
+        // Clean up segments older than 4000ms (2000ms delay + 2000ms visible = 4000ms total)
+        vanishingSegmentsRef.current = vanishingSegmentsRef.current.filter(
+          (seg) => now - seg.spawnTime < 4000
+        );
+
+        // Render visible vanishing segments to canvas
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        for (const seg of vanishingSegmentsRef.current) {
+          const elapsedSinceSpawn = now - seg.spawnTime;
+          if (elapsedSinceSpawn >= 2000 && elapsedSinceSpawn < 4000) {
+            // Smoothly dissolve in the last 600ms before vanishing
+            const alpha = elapsedSinceSpawn > 3400 ? Math.max(0, (4000 - elapsedSinceSpawn) / 600) : 1;
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = seg.color;
+            ctx.lineWidth = seg.size;
+            ctx.beginPath();
+            ctx.moveTo(seg.p1.x, seg.p1.y);
+            ctx.lineTo(seg.p2.x, seg.p2.y);
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
       }
 
       animId = requestAnimationFrame(renderLoop);
@@ -538,17 +1261,40 @@ export function CanvasPad(props: {
     const onDown = (evt: PointerEvent) => {
       if (disabledRef.current || (isOneStrokeRef.current && hasSubmittedRef.current)) return;
       drawing = true;
+      drawingRef.current = true;
       strokeMovedRef.current = false;
       try {
         canvas.setPointerCapture(evt.pointerId);
       } catch {}
 
-      let p = getCanvasPos(evt, canvas, isUpsideDownRef.current, isSpinningRef.current, spinStartTimeRef.current);
+      if (isFlashlightRef.current) {
+        updateFlashlightDOM(evt.clientX, evt.clientY);
+      }
+      if (isShadowFingerRef.current) {
+        updateShadowDOM(evt.clientX, evt.clientY);
+      }
 
-      if (isWobbleRef.current) {
-        const jX = (Math.random() - 0.5) * 16;
-        const jY = (Math.random() - 0.5) * 16;
-        p = { x: Math.max(0, Math.min(canvas.width, p.x + jX)), y: Math.max(0, Math.min(canvas.height, p.y + jY)) };
+      let p = getCanvasPos(
+        evt,
+        canvas,
+        isUpsideDownRef.current,
+        isSpinningRef.current,
+        spinStartTimeRef.current
+      );
+
+      // Trash Compactor: block drawing outside the active open area
+      if (isTrashCompactorRef.current) {
+        const elapsed = Date.now() - compactorStartTimeRef.current;
+        const prog = elapsed < 5000 ? 0 : Math.min(1, (elapsed - 5000) / 60000);
+        const bounds = getCompactorBounds(canvas.width, canvas.height, prog);
+        if (p.x < bounds.minX || p.x > bounds.maxX || p.y < bounds.minY || p.y > bounds.maxY) {
+          return;
+        }
+      }
+
+      if (isIceSkaterRef.current) {
+        icePosRef.current = { ...p };
+        iceVelRef.current = { vx: 0, vy: 0 };
       }
 
       // Input Delay queue
@@ -602,22 +1348,50 @@ export function CanvasPad(props: {
         drawBubbleCluster(ctx, p, colorRef.current);
         setHasDrawn(true);
         onChangeRef.current?.();
+      } else if (isTypoStompRef.current) {
+        typoDistAccumulatorRef.current = 0;
+        ctx.save();
+        ctx.font = `bold ${Math.max(16, activeStrokeWidthRef.current * 1.5)}px "Comic Sans MS", monospace`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = colorRef.current;
+        const char = TYPO_CHARS[Math.floor(Math.random() * TYPO_CHARS.length)]!;
+        ctx.fillText(char, p.x, p.y);
+        ctx.restore();
+        setHasDrawn(true);
+        onChangeRef.current?.();
       }
     };
 
     const onMove = (evt: PointerEvent) => {
-      // Zoom lens position tracking
-      if (isZoom && containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        const zx = Math.max(0, Math.min(100, ((evt.clientX - rect.left) / rect.width) * 100));
-        const zy = Math.max(0, Math.min(100, ((evt.clientY - rect.top) / rect.height) * 100));
-        setZoomOrigin({ x: zx, y: zy });
+      if (isFlashlightRef.current) {
+        updateFlashlightDOM(evt.clientX, evt.clientY);
+      }
+      if (isShadowFingerRef.current) {
+        updateShadowDOM(evt.clientX, evt.clientY);
       }
 
       if (!drawing || (isOneStrokeRef.current && hasSubmittedRef.current)) return;
 
-      const rawPos = getCanvasPos(evt, canvas, isUpsideDownRef.current, isSpinningRef.current, spinStartTimeRef.current);
+      const rawPos = getCanvasPos(
+        evt,
+        canvas,
+        isUpsideDownRef.current,
+        isSpinningRef.current,
+        spinStartTimeRef.current
+      );
       let p = rawPos;
+
+      // Trash Compactor: clamp position to open wall boundary
+      if (isTrashCompactorRef.current) {
+        const elapsed = Date.now() - compactorStartTimeRef.current;
+        const prog = elapsed < 5000 ? 0 : Math.min(1, (elapsed - 5000) / 60000);
+        const bounds = getCompactorBounds(canvas.width, canvas.height, prog);
+        p = {
+          x: Math.max(bounds.minX, Math.min(bounds.maxX, p.x)),
+          y: Math.max(bounds.minY, Math.min(bounds.maxY, p.y))
+        };
+      }
 
       if (isWobbleRef.current) {
         const angle = Date.now() / 35 + currentPointsRef.current.length * 0.5;
@@ -631,6 +1405,21 @@ export function CanvasPad(props: {
         slingshotPullRef.current = p;
         updateSlingshotDOM(slingshotAnchorRef.current, p);
         return;
+      }
+
+      // Ice Skater: Smooth gliding inertia & momentum slide physics (frictionless ice)
+      if (isIceSkaterRef.current && icePosRef.current) {
+        const currentIce = icePosRef.current;
+        const ax = (p.x - currentIce.x) * 0.18;
+        const ay = (p.y - currentIce.y) * 0.18;
+        iceVelRef.current.vx = (iceVelRef.current.vx + ax) * 0.94;
+        iceVelRef.current.vy = (iceVelRef.current.vy + ay) * 0.94;
+        const newIce = {
+          x: Math.max(0, Math.min(canvas.width, currentIce.x + iceVelRef.current.vx)),
+          y: Math.max(0, Math.min(canvas.height, currentIce.y + iceVelRef.current.vy))
+        };
+        p = newIce;
+        icePosRef.current = newIce;
       }
 
       // Glitch Teleport (Controlled, less frequent, clean gap jumps)
@@ -648,13 +1437,34 @@ export function CanvasPad(props: {
           const teleportY = Math.max(10, Math.min(canvas.height - 10, rawPos.y + jumpDistY));
 
           p = { x: teleportX, y: teleportY };
+          strokeStartRef.current = p;
+          currentPointsRef.current.push(p);
           isTeleportJumpRef.current = true;
-        } else {
-          const off = teleportOffsetRef.current;
-          p = {
-            x: Math.max(10, Math.min(canvas.width - 10, rawPos.x + off.x)),
-            y: Math.max(10, Math.min(canvas.height - 10, rawPos.y + off.y))
-          };
+          return;
+        }
+      }
+
+      if (isGlitchRef.current && teleportOffsetRef.current.x !== 0) {
+        p = {
+          x: Math.max(0, Math.min(canvas.width, rawPos.x + teleportOffsetRef.current.x)),
+          y: Math.max(0, Math.min(canvas.height, rawPos.y + teleportOffsetRef.current.y))
+        };
+      }
+
+      const prev = currentPointsRef.current[currentPointsRef.current.length - 1] ?? strokeStartRef.current ?? p;
+
+      // Ink limit budget calculation
+      if (maxInk > 0 && inkRemainingRef.current <= 0) {
+        return;
+      }
+
+      if (maxInk > 0 && prev) {
+        const segDist = Math.hypot(p.x - prev.x, p.y - prev.y);
+        const newRemaining = Math.max(0, inkRemainingRef.current - segDist);
+        inkRemainingRef.current = newRemaining;
+        setInkRemaining(newRemaining);
+        if (newRemaining <= 0) {
+          return;
         }
       }
 
@@ -670,84 +1480,116 @@ export function CanvasPad(props: {
         return;
       }
 
-      if (isRandomBrushRef.current) {
-        pointsSinceSizeShiftRef.current += 1;
-        if (pointsSinceSizeShiftRef.current >= 6) {
-          pointsSinceSizeShiftRef.current = 0;
-          const randomSizes = [4, 8, 14, 22, 32, 42];
-          currentDynamicSizeRef.current = randomSizes[Math.floor(Math.random() * randomSizes.length)]!;
-          ctx.lineWidth = currentDynamicSizeRef.current;
-        }
-      }
-
-      if (maxInkRef.current > 0) {
-        const prev = currentPointsRef.current[currentPointsRef.current.length - 1];
-        if (prev) {
-          const segDist = Math.hypot(p.x - prev.x, p.y - prev.y);
-          if (inkRemainingRef.current - segDist <= 0) {
-            inkRemainingRef.current = 0;
-            setInkRemaining(0);
-            currentPointsRef.current.push(p);
-            ctx.beginPath();
-            ctx.moveTo(prev.x, prev.y);
-            ctx.lineTo(p.x, p.y);
-            ctx.stroke();
-            if (isMirrorRef.current) {
-              ctx.beginPath();
-              ctx.moveTo(canvas.width - prev.x, prev.y);
-              ctx.lineTo(canvas.width - p.x, p.y);
-              ctx.stroke();
-            }
-            setHasDrawn(true);
-            onChangeRef.current?.();
-            onUp(evt);
-            return;
-          } else {
-            inkRemainingRef.current -= segDist;
-            setInkRemaining(inkRemainingRef.current);
-          }
-        }
-      }
-
-      const prev = currentPointsRef.current[currentPointsRef.current.length - 1];
+      strokeMovedRef.current = true;
       currentPointsRef.current.push(p);
-      const st = strokeStartRef.current;
-      if (st) {
-        const dist = Math.hypot(p.x - st.x, p.y - st.y);
-        if (dist > 2) strokeMovedRef.current = true;
-      }
 
       if (isPixelArtRef.current) {
         drawPixelBlock(ctx, p, colorRef.current);
-      } else if (isBubblesRef.current) {
-        if (!prev || Math.hypot(p.x - prev.x, p.y - prev.y) > 10) {
-          drawBubbleCluster(ctx, p, colorRef.current);
+        setHasDrawn(true);
+        onChangeRef.current?.();
+        return;
+      }
+
+      if (isBubblesRef.current) {
+        drawBubbleCluster(ctx, p, colorRef.current);
+        setHasDrawn(true);
+        onChangeRef.current?.();
+        return;
+      }
+
+      if (isSnakeTailRef.current) {
+        trimSnakeToLength(strokesRef.current, currentPointsRef.current, 3500);
+        redrawAllStrokes(ctx, canvas, strokesRef.current, currentPointsRef.current);
+        setHasDrawn(true);
+        onChangeRef.current?.();
+        return;
+      }
+
+      if (isTypoStompRef.current) {
+        const segDist = Math.hypot(p.x - prev.x, p.y - prev.y);
+        typoDistAccumulatorRef.current += segDist;
+        const stepInterval = Math.max(18, activeStrokeWidthRef.current * 1.6);
+        if (typoDistAccumulatorRef.current >= stepInterval) {
+          typoDistAccumulatorRef.current = 0;
+          const angle = Math.atan2(p.y - prev.y, p.x - prev.x);
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(angle);
+          ctx.font = `bold ${Math.max(16, activeStrokeWidthRef.current * 1.5)}px "Comic Sans MS", monospace`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = colorRef.current;
+          const char = TYPO_CHARS[Math.floor(Math.random() * TYPO_CHARS.length)]!;
+          ctx.fillText(char, 0, 0);
+          ctx.restore();
+          setHasDrawn(true);
+          onChangeRef.current?.();
         }
-      } else if (isTeleportJumpRef.current) {
-        // Disconnected jump with empty space - zero interpolation line
-        isTeleportJumpRef.current = false;
+        return;
+      }
+
+      let strokeWidthToUse = activeStrokeWidthRef.current;
+      if (isRandomBrushRef.current) {
+        pointsSinceSizeShiftRef.current++;
+        if (pointsSinceSizeShiftRef.current >= 8) {
+          pointsSinceSizeShiftRef.current = 0;
+          const randomSizes = [4, 8, 14, 22, 32, 42];
+          currentDynamicSizeRef.current = randomSizes[Math.floor(Math.random() * randomSizes.length)]!;
+        }
+        strokeWidthToUse = currentDynamicSizeRef.current;
+      }
+
+      ctx.lineWidth = strokeWidthToUse;
+
+      if (isGravityDripRef.current) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, (isRandomBrushRef.current ? currentDynamicSizeRef.current : activeStrokeWidthRef.current) / 2, 0, Math.PI * 2);
-        ctx.fillStyle = colorRef.current;
-        ctx.fill();
-      } else {
-        if (prev) {
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+
+        // Spawn gravity drip droplets downward occasionally
+        if (Math.random() < 0.22) {
+          const dripLength = Math.floor(Math.random() * 45) + 15;
+          const dripWidth = Math.max(2, strokeWidthToUse * 0.45);
+          ctx.save();
+          ctx.lineWidth = dripWidth;
           ctx.beginPath();
-          ctx.moveTo(prev.x, prev.y);
-          ctx.lineTo(p.x, p.y);
+          ctx.moveTo(p.x, p.y);
+          const dripBendX = p.x + (Math.random() - 0.5) * 8;
+          const endY = Math.min(canvas.height - 6, p.y + dripLength);
+          ctx.lineTo(dripBendX, endY);
           ctx.stroke();
 
-          if (isMirrorRef.current) {
-            ctx.beginPath();
-            ctx.moveTo(canvas.width - prev.x, prev.y);
-            ctx.lineTo(canvas.width - p.x, p.y);
-            ctx.stroke();
-          }
+          // Droplet bead at bottom
+          ctx.beginPath();
+          ctx.arc(dripBendX, endY, dripWidth * 1.4, 0, Math.PI * 2);
+          ctx.fillStyle = colorRef.current;
+          ctx.fill();
 
-          if (isGravityDripRef.current && Math.random() < 0.09) {
-            drawGravityDrip(ctx, p, colorRef.current);
+          // Detached heavy falling drop
+          if (Math.random() < 0.5) {
+            const dropDist = Math.floor(Math.random() * 25) + 12;
+            const dropY = Math.min(canvas.height - 6, endY + dropDist);
+            ctx.beginPath();
+            ctx.arc(dripBendX, dropY, dripWidth * 0.9, 0, Math.PI * 2);
+            ctx.fill();
           }
+          ctx.restore();
         }
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(prev.x, prev.y);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+
+      if (isMirrorRef.current) {
+        const mirrorPrevX = canvas.width - prev.x;
+        const mirrorCurrX = canvas.width - p.x;
+        ctx.beginPath();
+        ctx.moveTo(mirrorPrevX, prev.y);
+        ctx.lineTo(mirrorCurrX, p.y);
+        ctx.stroke();
       }
 
       setHasDrawn(true);
@@ -757,126 +1599,150 @@ export function CanvasPad(props: {
     const onUp = (evt: PointerEvent) => {
       if (!drawing) return;
       drawing = false;
+      drawingRef.current = false;
 
-      if (isInputDelayRef.current) {
-        const p = getCanvasPos(evt, canvas, isUpsideDownRef.current, isSpinningRef.current, spinStartTimeRef.current);
-        delayedQueueRef.current.push({
-          time: Date.now(),
-          type: "up",
-          p,
-          color: colorRef.current,
-          size: activeStrokeWidthRef.current
-        });
-        return;
-      }
-
-      // Slingshot Release -> Shoot ink projectile!
-      if (isRubberbandRef.current && isSlingshotAimingRef.current && slingshotAnchorRef.current) {
-        const anchor = slingshotAnchorRef.current;
-        const pull = slingshotPullRef.current || anchor;
+      // Slingshot release to fire with ballistic curved arc
+      if (isRubberbandRef.current && isSlingshotAimingRef.current && slingshotAnchorRef.current && slingshotPullRef.current) {
         isSlingshotAimingRef.current = false;
-        slingshotAnchorRef.current = null;
-        slingshotPullRef.current = null;
         hideTetherDOM();
 
+        const anchor = slingshotAnchorRef.current;
+        const pull = slingshotPullRef.current;
         const dx = pull.x - anchor.x;
         const dy = pull.y - anchor.y;
         const pullDist = Math.hypot(dx, dy);
 
-        if (pullDist > 6) {
+        if (pullDist > 12) {
           const flingPower = Math.min(320, pullDist * 2.2);
           const angle = Math.atan2(-dy, -dx);
           const targetX = Math.max(10, Math.min(canvas.width - 10, anchor.x + Math.cos(angle) * flingPower));
           const targetY = Math.max(10, Math.min(canvas.height - 10, anchor.y + Math.sin(angle) * flingPower));
 
+          const midX = (anchor.x + targetX) / 2;
+          const curveDrop = Math.min(55, pullDist * 0.22);
+          const midY = (anchor.y + targetY) / 2 + curveDrop;
+
           ctx.save();
           ctx.lineCap = "round";
-          ctx.lineJoin = "round";
           ctx.strokeStyle = colorRef.current;
-          ctx.fillStyle = colorRef.current;
-          ctx.lineWidth = activeStrokeWidthRef.current;
+          ctx.lineWidth = Math.max(6, activeStrokeWidthRef.current * 1.4);
 
-          const strokePts: StrokePoint[] = [];
-          const steps = 14;
+          // Impact ballistic curved projectile line
           ctx.beginPath();
           ctx.moveTo(anchor.x, anchor.y);
-          strokePts.push({ x: anchor.x, y: anchor.y });
-
-          for (let step = 1; step <= steps; step++) {
-            const t = step / steps;
-            const ptX = anchor.x + (targetX - anchor.x) * t;
-            const ptY = anchor.y + (targetY - anchor.y) * t + Math.sin(t * Math.PI) * (pullDist * 0.14);
-            ctx.lineTo(ptX, ptY);
-            strokePts.push({ x: ptX, y: ptY });
-          }
+          ctx.quadraticCurveTo(midX, midY, targetX, targetY);
           ctx.stroke();
 
-          // Impact splatter head
-          ctx.beginPath();
-          ctx.arc(targetX, targetY, activeStrokeWidthRef.current * 0.85, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Impact droplet beads
-          for (let d = 0; d < 3; d++) {
-            const sAngle = angle + (Math.random() - 0.5) * 1.6;
-            const sDist = Math.floor(Math.random() * 14) + 6;
-            const sx = targetX + Math.cos(sAngle) * sDist;
-            const sy = targetY + Math.sin(sAngle) * sDist;
+          // Splatter blast on landing
+          const splashCount = Math.floor(Math.random() * 8) + 8;
+          ctx.fillStyle = colorRef.current;
+          for (let s = 0; s < splashCount; s++) {
+            const spAngle = Math.random() * Math.PI * 2;
+            const spDist = Math.random() * 26 + 6;
+            const spRadius = Math.random() * 4.5 + 2;
             ctx.beginPath();
-            ctx.arc(sx, sy, Math.max(1.5, activeStrokeWidthRef.current * 0.35), 0, Math.PI * 2);
+            ctx.arc(targetX + Math.cos(spAngle) * spDist, targetY + Math.sin(spAngle) * spDist, spRadius, 0, Math.PI * 2);
             ctx.fill();
           }
           ctx.restore();
 
-          const newStroke: StrokeEvent = {
-            id: Math.random().toString(36).substr(2, 9),
-            playerId: playerIdRef.current,
-            points: strokePts,
-            brushSize: activeStrokeWidthRef.current,
-            color: hexToRgb(colorRef.current),
-            opacity: 1,
-            timestamp: Date.now()
-          };
-          strokesRef.current.push(newStroke);
-          setHasDrawn(true);
-          onChangeRef.current?.();
-        } else {
-          // Tap stamp dot
-          ctx.beginPath();
-          ctx.arc(anchor.x, anchor.y, activeStrokeWidthRef.current / 2, 0, Math.PI * 2);
-          ctx.fillStyle = colorRef.current;
-          ctx.fill();
+          // Sample curved quadratic trajectory into stroke points
+          const curvePoints: StrokePoint[] = [];
+          const steps = 14;
+          for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const cx = (1 - t) * (1 - t) * anchor.x + 2 * (1 - t) * t * midX + t * t * targetX;
+            const cy = (1 - t) * (1 - t) * anchor.y + 2 * (1 - t) * t * midY + t * t * targetY;
+            curvePoints.push({ x: cx, y: cy });
+          }
 
           strokesRef.current.push({
             id: Math.random().toString(36).substr(2, 9),
             playerId: playerIdRef.current,
-            points: [anchor],
-            brushSize: activeStrokeWidthRef.current,
+            points: curvePoints,
+            brushSize: Math.max(6, activeStrokeWidthRef.current * 1.4),
             color: hexToRgb(colorRef.current),
             opacity: 1,
             timestamp: Date.now()
           });
+
           setHasDrawn(true);
           onChangeRef.current?.();
         }
 
-        strokeStartRef.current = null;
-        currentPointsRef.current = [];
+        slingshotAnchorRef.current = null;
+        slingshotPullRef.current = null;
         try {
           canvas.releasePointerCapture(evt.pointerId);
         } catch {}
         return;
       }
 
-      if (isOneStrokeRef.current && hasSubmittedRef.current) {
+      // Input Delay queue
+      if (isInputDelayRef.current) {
+        const rawPos = getCanvasPos(
+          evt,
+          canvas,
+          isUpsideDownRef.current,
+          isSpinningRef.current,
+          spinStartTimeRef.current
+        );
+        delayedQueueRef.current.push({
+          time: Date.now(),
+          type: "up",
+          p: rawPos,
+          color: colorRef.current,
+          size: activeStrokeWidthRef.current
+        });
+        try {
+          canvas.releasePointerCapture(evt.pointerId);
+        } catch {}
+        return;
+      }
+
+      const rawPos = getCanvasPos(
+        evt,
+        canvas,
+        isUpsideDownRef.current,
+        isSpinningRef.current,
+        spinStartTimeRef.current
+      );
+      let p = rawPos;
+      if (isGlitchRef.current && teleportOffsetRef.current.x !== 0) {
+        p = {
+          x: Math.max(0, Math.min(canvas.width, rawPos.x + teleportOffsetRef.current.x)),
+          y: Math.max(0, Math.min(canvas.height, rawPos.y + teleportOffsetRef.current.y))
+        };
+      }
+
+      if (isSnakeTailRef.current && currentPointsRef.current.length > 0) {
+        const newStroke: StrokeEvent = {
+          id: Math.random().toString(36).substr(2, 9),
+          playerId: playerIdRef.current,
+          points: [...currentPointsRef.current],
+          brushSize: activeStrokeWidthRef.current,
+          color: hexToRgb(colorRef.current),
+          opacity: 1,
+          timestamp: Date.now()
+        };
+        strokesRef.current.push(newStroke);
+        trimSnakeToLength(strokesRef.current, [], 3500);
+        redrawAllStrokes(ctx, canvas, strokesRef.current);
+        currentPointsRef.current = [];
+        strokeStartRef.current = null;
+        setHasDrawn(true);
+        onChangeRef.current?.();
+        try {
+          canvas.releasePointerCapture(evt.pointerId);
+        } catch {}
         return;
       }
 
       if (currentPointsRef.current.length > 0) {
         const effectiveStrokeSize = isRandomBrushRef.current ? currentDynamicSizeRef.current : activeStrokeWidthRef.current;
 
-        if (!strokeMovedRef.current && !isPixelArtRef.current && !isBubblesRef.current) {
-          const p = currentPointsRef.current[0]!;
+        // If tap without moving, draw a dot
+        if (!strokeMovedRef.current && strokeStartRef.current) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, effectiveStrokeSize / 2, 0, Math.PI * 2);
           if (isMirrorRef.current) {
@@ -939,7 +1805,7 @@ export function CanvasPad(props: {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [isZoom]);
+  }, []);
 
   const clear = () => {
     const canvas = canvasRef.current;
@@ -957,6 +1823,13 @@ export function CanvasPad(props: {
     strokeStartRef.current = null;
     strokesRef.current = [];
     delayedQueueRef.current = [];
+    vanishingSegmentsRef.current = [];
+    delayedInProgressPointsRef.current = [];
+    icePosRef.current = null;
+    iceVelRef.current = { vx: 0, vy: 0 };
+    typoDistAccumulatorRef.current = 0;
+    compactorStartTimeRef.current = Date.now();
+    setCompactorProgress(0);
     hasSubmittedRef.current = false;
     hideTetherDOM();
     props.onChange?.();
@@ -1005,10 +1878,10 @@ export function CanvasPad(props: {
 
       <div
         ref={containerRef}
-        className={`canvasWrap ${isZoom ? "trick-zoom-viewport" : ""}`}
+        className="canvasWrap"
         style={{
           position: "relative",
-          overflow: isSpinning || isZoom ? "hidden" : "visible",
+          overflow: isSpinning || isTrashCompactor ? "hidden" : "visible",
           aspectRatio: `${width} / ${height}`,
           maxWidth: width === height ? "min(320px, calc(100vh - 340px))" : undefined
         }}
@@ -1019,17 +1892,223 @@ export function CanvasPad(props: {
           height={height}
           className={`canvas ${isSpinning ? "trick-spinning-canvas" : ""}`}
           style={{
-            aspectRatio: `${width} / ${height}`,
-            ...(isBlind ? { opacity: 0.05, filter: "blur(20px)" } : {}),
-            ...(isZoom ? { transform: "scale(2.65)", transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`, transition: "transform-origin 0.04s ease-out" } : {})
+            ...(isBlind ? { opacity: 0.05, filter: "blur(20px)" } : {})
           }}
         />
 
+        {/* Alien Vaporizer Beam & UFO DOM */}
+        {isTractorBeam && (
+          <>
+            <div
+              ref={tractorBeamDomRef}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                pointerEvents: "none",
+                zIndex: 5,
+                background: "linear-gradient(to bottom, rgba(74, 222, 128, 0.45) 0%, rgba(34, 197, 94, 0.15) 85%, rgba(34, 197, 94, 0) 100%)",
+                clipPath: "polygon(40% 0%, 60% 0%, 100% 100%, 0% 100%)",
+                boxShadow: "0 0 25px rgba(74, 222, 128, 0.5)",
+                transition: "background 0.15s ease, box-shadow 0.15s ease"
+              }}
+            />
+            <div
+              ref={ufoDomRef}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "64px",
+                height: "48px",
+                pointerEvents: "none",
+                zIndex: 7,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "2.4rem",
+                filter: "drop-shadow(0 0 14px rgba(74, 222, 128, 0.9))",
+                transition: "filter 0.15s ease"
+              }}
+            >
+              🛸
+            </div>
+          </>
+        )}
+
+        {/* Puzzle Jumble warning badge */}
+        {isPuzzleJumble && (
+          <div
+            style={{
+              position: "absolute",
+              top: "10px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "rgba(16, 185, 129, 0.9)",
+              border: "1px solid rgba(255, 255, 255, 0.3)",
+              color: "#fff",
+              padding: "4px 14px",
+              borderRadius: "999px",
+              fontSize: "0.78rem",
+              fontWeight: 800,
+              pointerEvents: "none",
+              zIndex: 6,
+              boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+              whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            <span>🧩</span>
+            <span>Puzzle Jumble: All 9 tiles will scramble with numbered badges on submit!</span>
+          </div>
+        )}
+
+        {/* Guillotine Chop top warning badge */}
+        {isSplitHalves && (
+          <div
+            style={{
+              position: "absolute",
+              top: "10px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "rgba(239, 68, 68, 0.88)",
+              border: "1px solid rgba(255, 255, 255, 0.3)",
+              color: "#fff",
+              padding: "4px 14px",
+              borderRadius: "999px",
+              fontSize: "0.78rem",
+              fontWeight: 800,
+              pointerEvents: "none",
+              zIndex: 6,
+              boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+              whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            <span>🪓</span>
+            <span>Guillotine Chop: A random half will be sliced off upon submission!</span>
+          </div>
+        )}
+
+        {/* Flashlight Spotlight in the dark overlay */}
+        {isFlashlight && (
+          <div
+            ref={flashlightOverlayRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              borderRadius: "inherit",
+              background: "radial-gradient(circle 65px at 50% 50%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 42px, rgba(0,0,0,0.92) 58px, #000000 65px, #000000 100%)",
+              zIndex: 6
+            }}
+          />
+        )}
+
+        {/* Reverse Spotlight shadow finger overlay */}
+        {isShadowFinger && (
+          <div
+            ref={shadowOverlayRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              borderRadius: "inherit",
+              background: "radial-gradient(circle 165px at 50% 50%, #000000 0%, #000000 135px, rgba(0,0,0,0.85) 150px, rgba(0,0,0,0) 165px)",
+              zIndex: 6
+            }}
+          />
+        )}
+
+        {/* Trash Compactor Shrinking Walls Overlay */}
+        {isTrashCompactor && (
+          <>
+            {compactorProgress === 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "10px",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  background: "rgba(239, 68, 68, 0.9)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  color: "#fff",
+                  padding: "4px 14px",
+                  borderRadius: "999px",
+                  fontSize: "0.78rem",
+                  fontWeight: 800,
+                  pointerEvents: "none",
+                  zIndex: 6,
+                  boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                ⚠️ Compactor starting in 5 seconds...
+              </div>
+            )}
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 5, overflow: "hidden" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)",
+                  borderBottom: compactorProgress > 0 ? "3px solid #ef4444" : "none",
+                  boxShadow: compactorProgress > 0 ? "0 2px 4px rgba(0,0,0,0.35)" : "none"
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)",
+                  borderTop: compactorProgress > 0 ? "3px solid #ef4444" : "none",
+                  boxShadow: compactorProgress > 0 ? "0 -2px 4px rgba(0,0,0,0.35)" : "none"
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  bottom: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  left: 0,
+                  width: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)",
+                  borderRight: compactorProgress > 0 ? "3px solid #ef4444" : "none",
+                  boxShadow: compactorProgress > 0 ? "2px 0 4px rgba(0,0,0,0.35)" : "none"
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  top: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  bottom: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  right: 0,
+                  width: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)",
+                  borderLeft: compactorProgress > 0 ? "3px solid #ef4444" : "none",
+                  boxShadow: compactorProgress > 0 ? "-2px 0 4px rgba(0,0,0,0.35)" : "none"
+                }}
+              />
+            </div>
+          </>
+        )}
+
         {/* Slingshot Pull & Shoot trajectory overlay */}
         <svg ref={tetherSvgRef} className="trick-rubberband-tether" style={{ display: "none" }}>
-          {/* Aiming trajectory forward laser line */}
-          <line
-            ref={tetherAimLineRef}
+          {/* Aiming trajectory forward ballistic curve */}
+          <path
+            ref={tetherAimPathRef}
+            fill="none"
             stroke="#38bdf8"
             strokeWidth={3}
             strokeDasharray="6,4"
@@ -1085,7 +2164,7 @@ export function CanvasPad(props: {
               pointerEvents: "none"
             }}
           >
-            ⏱️ 2.0s Input Lag
+            ⏱️ 2s Lag + Vanishing Ink
           </div>
         )}
       </div>

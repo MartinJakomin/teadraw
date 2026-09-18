@@ -38,13 +38,11 @@ export function DrawScreen(props: {
       case "mirror":
         return { icon: "🪞", title: "Mirror Symmetry", desc: "Horizontal symmetry! Every stroke is mirrored on both sides!" };
       case "ink_limit":
-        return { icon: "🖋️", title: "Ink Budget", desc: "You only have 2,000px of ink! Budget your strokes carefully!" };
-      case "zoom_lens":
-        return { icon: "🔍", title: "Magnifying Lens", desc: "Canvas is zoomed in 3x! Draw up close through a moving magnifying lens!" };
+        return { icon: "🖋️", title: "Ink Budget", desc: "You only have 3,000px of ink! Budget your strokes carefully!" };
       case "rubberband":
-        return { icon: "🐦", title: "Slingshot Pull & Shoot", desc: "Pull back to aim and release to fire ink shots across the canvas!" };
+        return { icon: "🐦", title: "Slingshot Pull & Shoot", desc: "Pull back to aim and release to fire curved ballistic ink shots across the canvas!" };
       case "input_delay":
-        return { icon: "⏱️", title: "2-Second Input Lag", desc: "Extreme latency! All strokes appear with a strict 2-second delay!" };
+        return { icon: "⏱️", title: "2s Lag + Vanishing Ink", desc: "Strokes appear 2s late, stay for 2s, and then vanish from your view!" };
       case "spinning":
         return { icon: "🎠", title: "Spinning Canvas", desc: "Dizzy carousel! The canvas continuously spins 360° as you draw!" };
       case "glitch":
@@ -55,6 +53,24 @@ export function DrawScreen(props: {
         return { icon: "🧱", title: "8-Bit Pixel Block", desc: "Retro arcade mode! All strokes snap into chunky pixel grid blocks!" };
       case "bubbles":
         return { icon: "🫧", title: "Bubble Stamping", desc: "Bubble stampede! Dragging stamps clusters of colorful glowing bubbles!" };
+      case "split_halves":
+        return { icon: "🪓", title: "Guillotine Chop", desc: "Guillotine Chop! Upon submitting, a random half of your final drawing will be sliced off!" };
+      case "flashlight":
+        return { icon: "🕯️", title: "Spotlight in the Dark", desc: "Pitch black! Only a small spotlight around your cursor reveals the canvas!" };
+      case "ice_skater":
+        return { icon: "🧊", title: "Ice Skater Slide", desc: "Smooth frictionless ice! Gliding momentum and inertia make your strokes slide smoothly!" };
+      case "typo_stomp":
+        return { icon: "🔤", title: "Typo Stomp", desc: "ASCII Typewriter! Dragging your brush stamps trails of random letters, numbers, and symbols!" };
+      case "shadow_finger":
+        return { icon: "🌑", title: "Reverse Spotlight", desc: "Shadow finger! A giant dark eclipse circle tracks under your cursor, hiding what you're drawing until you move!" };
+      case "trash_compactor":
+        return { icon: "🗑️", title: "Trash Compactor", desc: "Hazard alert! Starts in 5s, then walls slowly compact the canvas! Drawing is blocked outside open walls, but your drawing stays safe!" };
+      case "puzzle_jumble":
+        return { icon: "🧩", title: "Puzzle Jumble", desc: "Tile scrambler! Upon submitting, all tiles are shuffled into a puzzle with numbered badges!" };
+      case "snake_tail":
+        return { icon: "🐍", title: "Snake", desc: "Living snake with animated head and rattle tail! When total path length exceeds 3500px, the tail is trimmed in real-time!" };
+      case "tractor_beam":
+        return { icon: "🛸", title: "Alien Vaporizer", desc: "UFO alert! A flying saucer charges up its vaporizing beam and disintegrates all ink beneath it!" };
       default:
         return null;
     }

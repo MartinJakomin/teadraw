@@ -415,15 +415,23 @@ export function LobbyScreen(props: {
                               <option value="upside_down">🙃 Inverted Controls</option>
                               <option value="wobble">〰️ Earthquake Wobble</option>
                               <option value="mirror">🪞 Mirror Symmetry</option>
-                              <option value="ink_limit">🖋️ Ink Budget (2,000px)</option>
-                              <option value="zoom_lens">🔍 Magnifying Lens (3x Zoom)</option>
-                              <option value="rubberband">🐦 Slingshot (Pull Back & Shoot)</option>
-                              <option value="input_delay">⏱️ 2-Second Input Lag (Delayed)</option>
+                              <option value="ink_limit">🖋️ Ink Budget (3,000px)</option>
+                              <option value="rubberband">🐦 Slingshot (Curved Ballistic Shots)</option>
+                              <option value="input_delay">⏱️ 2s Lag + Vanishing Ink</option>
                               <option value="spinning">🎠 Spinning Canvas (Continuous 360°)</option>
                               <option value="glitch">👾 Glitch Teleport (Jitter Jumps)</option>
                               <option value="gravity_drip">💧 Gravity Drip (Melting Paint)</option>
                               <option value="pixel_art">🧱 8-Bit Pixel Block (Chunky Grid)</option>
                               <option value="bubbles">🫧 Bubble Stamping (Cluster Bubbles)</option>
+                              <option value="split_halves">🪓 Guillotine Chop (Random Half Sliced)</option>
+                              <option value="flashlight">🕯️ Spotlight in the Dark (Flashlight)</option>
+                              <option value="ice_skater">🧊 Ice Skater (Smooth Gliding)</option>
+                              <option value="typo_stomp">🔤 Typo Stomp (ASCII Letter Trail)</option>
+                              <option value="shadow_finger">🌑 Reverse Spotlight (Shadow Finger)</option>
+                              <option value="trash_compactor">🗑️ Trash Compactor (Shrinking Walls)</option>
+                              <option value="puzzle_jumble">🧩 Puzzle Jumble (Numbered Puzzle Scramble)</option>
+                              <option value="snake_tail">🐍 Snake (Head & Tail)</option>
+                              <option value="tractor_beam">🛸 Alien Vaporizer (Beam Disintegrator)</option>
                             </select>
                           </div>
                         )}

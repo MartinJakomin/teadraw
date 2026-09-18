@@ -684,14 +684,22 @@ export function startRound(room: Room) {
     "wobble",
     "mirror",
     "ink_limit",
-    "zoom_lens",
     "rubberband",
     "input_delay",
     "spinning",
     "glitch",
     "gravity_drip",
     "pixel_art",
-    "bubbles"
+    "bubbles",
+    "split_halves",
+    "flashlight",
+    "ice_skater",
+    "typo_stomp",
+    "shadow_finger",
+    "trash_compactor",
+    "puzzle_jumble",
+    "snake_tail",
+    "tractor_beam"
   ];
   const specificTrick: import("./gameTypes.js").TrickType | undefined =
     room.selectedTrick && room.selectedTrick !== "random" ? room.selectedTrick : undefined;
