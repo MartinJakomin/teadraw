@@ -9,7 +9,7 @@ export type ClientToServerEvents = {
   "room:join": (payload: { roomCode: string; name: string; playerId?: string }, ack?: (resp: any) => void) => void;
   "room:leave": (payload: { roomCode: string; playerId: string }) => void;
   "game:start": (payload: { roomCode: string; playerId: string }, ack?: (resp: any) => void) => void;
-  "draw:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string }, ack?: (resp: any) => void) => void;
+  "draw:submit": (payload: { roomCode: string; playerId: string; imageDataUrl: string; strokes?: StrokeEvent[] }, ack?: (resp: any) => void) => void;
   "clue:submit": (payload: { roomCode: string; playerId: string; text: string }, ack?: (resp: any) => void) => void;
   "vote:cast": (payload: { roomCode: string; playerId: string; optionId: string; likedOptionId?: string; likedOptionIds?: string[] }, ack?: (resp: any) => void) => void;
   "vote:chaos": (payload: { roomCode: string; playerId: string; votes: Record<string, string> }, ack?: (resp: any) => void) => void;
@@ -38,7 +38,28 @@ let socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
 
 export function getSocket() {
   if (!socket) {
-    socket = io(SERVER_URL, { transports: ["websocket"] });
+    socket = io(SERVER_URL, {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 4000,
+      timeout: 20000
+    });
+
+    if (typeof window !== "undefined") {
+      const ensureConnected = () => {
+        if (socket && !socket.connected) {
+          socket.connect();
+        }
+      };
+      window.addEventListener("online", ensureConnected);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          ensureConnected();
+        }
+      });
+    }
   }
   return socket;
 }

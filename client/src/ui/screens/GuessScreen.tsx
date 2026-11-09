@@ -56,8 +56,15 @@ export function GuessScreen(props: {
           <input 
             value={guess} 
             onChange={e => setGuess(e.target.value)} 
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && guess.trim() && !props.me.isSpectator) {
+                e.preventDefault();
+                props.onSubmit(guess);
+              }
+            }}
             placeholder="A potato?" 
             maxLength={30}
+            autoFocus
           />
         </div>
 

@@ -24,6 +24,11 @@ export function VoteScreen(props: {
   const [picked, setPicked] = useState<string>("");
   const [likedIds, setLikedIds] = useState<string[]>([]);
 
+  useEffect(() => {
+    setPicked("");
+    setLikedIds([]);
+  }, [props.vote?.drawingIndex, props.room.round]);
+
   // Chaos vote state
   const chaosDrawings = useMemo(() => {
     if (!props.room.chaosVote) return [];
@@ -68,6 +73,35 @@ export function VoteScreen(props: {
     setSubmittingChaos(true);
     props.onChaosVote(chaosPicks);
   };
+
+  // Auto-submit normal Drawful vote when timer expires
+  const hasAutoSubmittedNormalRef = useRef(false);
+  useEffect(() => {
+    hasAutoSubmittedNormalRef.current = false;
+  }, [props.vote?.drawingIndex, props.room.round]);
+
+  useEffect(() => {
+    if (isChaos || !props.room.endTime || hasAutoSubmittedNormalRef.current || alreadyNormal || isDrawer || spectating || !props.vote) return;
+    const check = setInterval(() => {
+      const remaining = props.room.endTime! - Date.now();
+      if (remaining <= 0 && !hasAutoSubmittedNormalRef.current) {
+        hasAutoSubmittedNormalRef.current = true;
+        clearInterval(check);
+        if (picked) {
+          props.onVote(picked, likedIds);
+        } else {
+          const myClue = (localStorage.getItem("teadraw:myClue") ?? "").trim().toLowerCase();
+          const eligibleOpts = props.vote!.options.filter((o) => !myClue || o.text.trim().toLowerCase() !== myClue);
+          const pool = eligibleOpts.length > 0 ? eligibleOpts : props.vote!.options;
+          const randomOpt = pool[Math.floor(Math.random() * pool.length)];
+          if (randomOpt) {
+            props.onVote(randomOpt.id, likedIds);
+          }
+        }
+      }
+    }, 500);
+    return () => clearInterval(check);
+  }, [isChaos, props.room.endTime, alreadyNormal, isDrawer, spectating, props.vote, picked, likedIds, props.onVote]);
 
   // Auto-submit Chaos votes when timer expires
   const hasAutoSubmittedChaosRef = useRef(false);

@@ -13,7 +13,7 @@ const ALL_TRICKS: Array<{ id: TrickType; name: string }> = [
   { id: "upside_down", name: "🙃 Inverted Controls (Inverted X/Y)" },
   { id: "wobble", name: "〰️ Earthquake Wobble (Tremor Jitter)" },
   { id: "mirror", name: "🪞 Mirror Symmetry (Dual Reflection)" },
-  { id: "ink_limit", name: "🖋️ Ink Budget (4,000px Meter)" },
+  { id: "ink_limit", name: "🖋️ Ink Budget (3,000px Meter)" },
   { id: "rubberband", name: "🐦 Slingshot (Pull Back & Shoot)" },
   { id: "input_delay", name: "⏱️ 2s Lag + Vanishing Ink" },
   { id: "spinning", name: "🎠 Spinning Canvas (Continuous 360°)" },
@@ -29,7 +29,12 @@ const ALL_TRICKS: Array<{ id: TrickType; name: string }> = [
   { id: "trash_compactor", name: "🗑️ Trash Compactor (Shrinking Drawing Area)" },
   { id: "puzzle_jumble", name: "🧩 Puzzle Jumble (All 9 Tiles Shuffled & Numbered)" },
   { id: "snake_tail", name: "🐍 Snake (Animated Head & Rattle Tail)" },
-  { id: "tractor_beam", name: "🛸 Alien Vaporizer (Periodic Charging Beam)" }
+  { id: "tractor_beam", name: "🛸 Alien Vaporizer (Periodic Charging Beam)" },
+  { id: "cubism", name: "🔺 Polygon Cubism (Connected Geometric Shards)" },
+  { id: "spiderweb", name: "🕸️ Spiderweb Threads (Cobwebs & Hanging Spiders)" },
+  { id: "magnets", name: "🧲 Magnet Anomaly (5 Poles, 10s Flip Cycle)" },
+  { id: "wind_tunnel", name: "🌬️ Wind Tunnel (Fast Alternating Stroke Winds)" },
+  { id: "poltergeist", name: "👻 Poltergeist Ghost (Roaming Drawing & Erasing Ghost)" }
 ];
 
 const TRICK_DESCRIPTIONS: Record<TrickType, string> = {
@@ -57,20 +62,32 @@ const TRICK_DESCRIPTIONS: Record<TrickType, string> = {
   trash_compactor: "Hazard warning! After a 5-second delay, walls slowly compress inward over 60s. Drawing outside open walls is locked, but your existing art stays intact!",
   puzzle_jumble: "Upon submitting, the canvas is divided into a 3x3 grid of 9 puzzle tiles, shuffled, and labeled with numbered badges (#1-#9) indicating the correct order!",
   snake_tail: "Your drawing is a single living snake with animated head and rattle tail! When total path length exceeds 3500px, the oldest tail segments are trimmed in real-time as you draw!",
-  tractor_beam: "A UFO patrols overhead, charging up a beam every few seconds to completely vaporize and obliterate all ink beneath it!"
+  tractor_beam: "A UFO patrols overhead, charging up a beam every few seconds to completely vaporize and obliterate all ink beneath it!",
+  cubism: "Every stroke (including straight lines!) automatically bridges to your earlier strokes or projects an angular prism vertex to form filled Picasso cubism polygons!",
+  spiderweb: "Delicate cobweb silk threads lightly connect nearby strokes while 8-legged spiders perch on the web and dangle from silk drop-threads!",
+  magnets: "5 high-power magnetic poles across the canvas strongly pull or push your brush path nearby, flipping polarity every 10 seconds!",
+  wind_tunnel: "Fast gusting winds blow across the canvas! Newly drawn wet ink rapidly drifts in the wind, flipping direction on every alternate stroke!",
+  poltergeist: "An always-present ghost roams your canvas throughout the round, continuously drawing its own segments and erasing pieces of your lines!"
 };
 
 export function PracticeScreen(props: { onExit: () => void }) {
   const [selectedTrick, setSelectedTrick] = useState<TrickType | "none">("none");
   const [currentDataUrl, setCurrentDataUrl] = useState<string>("");
   const [speedRushKey, setSpeedRushKey] = useState<number>(0);
+  const seenTricksRef = React.useRef<Set<TrickType>>(new Set());
 
   const activeTrick = selectedTrick === "none" ? undefined : selectedTrick;
   const activeDetails = getTrickDetails(activeTrick);
   const activeDesc = activeTrick ? TRICK_DESCRIPTIONS[activeTrick] : null;
 
   const handlePickRandomTrick = () => {
-    const pick = ALL_TRICKS[Math.floor(Math.random() * ALL_TRICKS.length)]!;
+    let available = ALL_TRICKS.filter((t) => !seenTricksRef.current.has(t.id) && t.id !== selectedTrick);
+    if (available.length === 0) {
+      seenTricksRef.current.clear();
+      available = ALL_TRICKS.filter((t) => t.id !== selectedTrick);
+    }
+    const pick = available[Math.floor(Math.random() * available.length)]!;
+    seenTricksRef.current.add(pick.id);
     setSelectedTrick(pick.id);
     if (pick.id === "half_time") setSpeedRushKey((k) => k + 1);
   };
@@ -83,18 +100,20 @@ export function PracticeScreen(props: { onExit: () => void }) {
 
   return (
     <div
-      className="page"
+      className="page center"
       style={{
         minHeight: "100vh",
         width: "100%",
-        justifyContent: "flex-start",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
         alignItems: "center",
-        padding: "clamp(0.75rem, 1.5vh, 1.5rem) 1rem 2.5rem",
+        padding: "clamp(0.75rem, 1.5vh, 1.5rem) 1rem",
         overflowY: "auto",
         boxSizing: "border-box"
       }}
     >
-      <div style={{ maxWidth: "980px", width: "100%" }}>
+      <div style={{ maxWidth: "980px", width: "100%", margin: "auto" }}>
         {/* Top Control Bar */}
         <div
           className="card"

@@ -54,6 +54,16 @@ export function getTrickDetails(trick?: TrickType) {
       return { icon: "🐍", title: "Snake", bg: "rgba(34, 197, 94, 0.2)", border: "rgba(34, 197, 94, 0.45)", color: "#4ade80" };
     case "tractor_beam":
       return { icon: "🛸", title: "Alien Vaporizer", bg: "rgba(34, 197, 94, 0.2)", border: "rgba(34, 197, 94, 0.45)", color: "#4ade80" };
+    case "cubism":
+      return { icon: "🔺", title: "Polygon Cubism", bg: "rgba(244, 63, 94, 0.2)", border: "rgba(244, 63, 94, 0.45)", color: "#fb7185" };
+    case "spiderweb":
+      return { icon: "🕸️", title: "Spiderweb Threads", bg: "rgba(148, 163, 184, 0.2)", border: "rgba(148, 163, 184, 0.45)", color: "#cbd5e1" };
+    case "magnets":
+      return { icon: "🧲", title: "Magnet Anomaly", bg: "rgba(239, 68, 68, 0.2)", border: "rgba(59, 130, 246, 0.45)", color: "#f87171" };
+    case "wind_tunnel":
+      return { icon: "🌬️", title: "Wind Tunnel", bg: "rgba(56, 189, 248, 0.2)", border: "rgba(56, 189, 248, 0.45)", color: "#7dd3fc" };
+    case "poltergeist":
+      return { icon: "👻", title: "Poltergeist Brush", bg: "rgba(168, 85, 247, 0.2)", border: "rgba(168, 85, 247, 0.45)", color: "#d8b4fe" };
     default:
       return null;
   }

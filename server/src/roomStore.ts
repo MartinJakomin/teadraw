@@ -1,6 +1,81 @@
 import { nanoid } from "nanoid";
-import type { Drawing, Option, Phase, Player, PlayerId, Reveal, RoomCode, RoomStatePublic, StrokeEvent } from "./gameTypes.js";
+import type { Drawing, Option, Phase, Player, PlayerId, Reveal, RoomCode, RoomStatePublic, StrokeEvent, TrickType } from "./gameTypes.js";
 import { pickPrompts, generateSmartDecoyPrompt } from "./prompts.js";
+
+export const ALL_TRICKS: readonly TrickType[] = [
+  "blind",
+  "one_stroke",
+  "large_brush",
+  "random_brush",
+  "half_time",
+  "upside_down",
+  "wobble",
+  "mirror",
+  "ink_limit",
+  "rubberband",
+  "input_delay",
+  "spinning",
+  "glitch",
+  "gravity_drip",
+  "pixel_art",
+  "bubbles",
+  "split_halves",
+  "flashlight",
+  "ice_skater",
+  "typo_stomp",
+  "shadow_finger",
+  "trash_compactor",
+  "puzzle_jumble",
+  "snake_tail",
+  "tractor_beam",
+  "cubism",
+  "spiderweb",
+  "magnets",
+  "wind_tunnel",
+  "poltergeist"
+] as const;
+
+export function pickTricks(count: number, usedTricks?: Set<TrickType>): TrickType[] {
+  if (count <= 0) return [];
+
+  let available = usedTricks ? ALL_TRICKS.filter((t) => !usedTricks.has(t)) : [...ALL_TRICKS];
+  available = shuffle(available);
+
+  if (available.length >= count) {
+    const picked = available.slice(0, count);
+    if (usedTricks) {
+      for (const t of picked) usedTricks.add(t);
+      if (usedTricks.size >= ALL_TRICKS.length) {
+        usedTricks.clear();
+      }
+    }
+    return picked;
+  }
+
+  // Not enough unused tricks left to fulfill `count`: take all remaining unused tricks first,
+  // then reset the deck and draw the rest from a fresh shuffle (excluding already picked in this batch when possible)
+  const picked: TrickType[] = [...available];
+  usedTricks?.clear();
+
+  while (picked.length < count) {
+    const batchExclusions = new Set(picked.slice(-Math.min(picked.length, ALL_TRICKS.length - 1)));
+    let freshPool = shuffle(ALL_TRICKS.filter((t) => !batchExclusions.has(t)));
+    if (freshPool.length === 0) {
+      freshPool = shuffle([...ALL_TRICKS]);
+    }
+    const needed = count - picked.length;
+    const take = freshPool.slice(0, needed);
+    picked.push(...take);
+    if (usedTricks) {
+      for (const t of take) usedTricks.add(t);
+      if (usedTricks.size >= ALL_TRICKS.length) {
+        usedTricks.clear();
+      }
+    }
+  }
+
+  return picked;
+}
 
 /** Non-spectators in join order (includes disconnected). */
 export function playingPlayerIdsInOrder(room: { playerOrder: PlayerId[]; playersById: Map<PlayerId, Player> }): PlayerId[] {
@@ -60,7 +135,12 @@ type Room = {
   drawTimerSeconds?: number;
   submitTimerSeconds?: number;
   voteTimerSeconds?: number;
+  revealTimerSeconds?: number;
   useExtraPrompt: boolean;
+  useCustomPrompts: boolean;
+  customPromptsOnly: boolean;
+  customPrompts: string[];
+  enableStrokeReplay: boolean;
   useRandomTricks: boolean;
   sameTrickForAll: boolean;
   selectedTrick?: import("./gameTypes.js").TrickType | "random";
@@ -87,8 +167,10 @@ type Room = {
   comedyLikesReceived: Map<PlayerId, number>;
   reveal?: Reveal;
   usedPrompts: Set<string>;
+  usedTricks: Set<TrickType>;
+  lastActivityAt: number;
 
-  chaosDrawings: Array<{ id: string; drawerId: PlayerId; imageDataUrl: string; prompt: string; trick?: import("./gameTypes.js").TrickType }>;
+  chaosDrawings: Array<{ id: string; drawerId: PlayerId; imageDataUrl: string; prompt: string; trick?: import("./gameTypes.js").TrickType; strokeLog?: StrokeEvent[] }>;
   chaosVotesByVoterId: Map<PlayerId, Record<string, PlayerId>>;
   chaosReveal?: import("./gameTypes.js").ChaosReveal;
 
@@ -140,6 +222,10 @@ export function createRoom(host: Player): Room {
     totalRounds: 1,
     timerSeconds: 0,
     useExtraPrompt: false,
+    useCustomPrompts: false,
+    customPromptsOnly: false,
+    customPrompts: [],
+    enableStrokeReplay: true,
     useRandomTricks: false,
     sameTrickForAll: false,
     selectedTrick: "random",
@@ -163,6 +249,8 @@ export function createRoom(host: Player): Room {
     chaosVotesByVoterId: new Map(),
     votedForId: new Map(),
     usedPrompts: new Set(),
+    usedTricks: new Set(),
+    lastActivityAt: Date.now(),
     allDrawingsHistory: [],
     fakeVotesTricked: new Map(),
     correctPromptsGuessed: new Map(),
@@ -177,18 +265,36 @@ export function createRoom(host: Player): Room {
 }
 
 export function getRoom(roomCode: RoomCode): Room | undefined {
-  return rooms.get(roomCode);
+  const r = rooms.get(roomCode);
+  if (r) r.lastActivityAt = Date.now();
+  return r;
 }
 
 export function removeRoom(roomCode: RoomCode) {
+  const r = rooms.get(roomCode);
+  if (r) clearRoomTimer(r);
   rooms.delete(roomCode);
+}
+
+export function cleanupStaleRooms(maxIdleMs = 30 * 60 * 1000): number {
+  const now = Date.now();
+  let removed = 0;
+  for (const [code, room] of rooms.entries()) {
+    const anyHumanConnected = [...room.playersById.values()].some((p) => !p.isBot && p.connected);
+    if (!anyHumanConnected && now - room.lastActivityAt > maxIdleMs) {
+      clearRoomTimer(room);
+      rooms.delete(code);
+      removed++;
+    }
+  }
+  return removed;
 }
 
 export function listPlayers(room: Room) {
   return [...room.playersById.values()];
 }
 
-export function toPublicState(room: Room): RoomStatePublic {
+export function toPublicState(room: Room, viewerId?: PlayerId): RoomStatePublic {
   const currentDrawing = room.drawings[room.drawingIndex];
   const players = listPlayers(room).map((p) => ({
     id: p.id,
@@ -212,7 +318,12 @@ export function toPublicState(room: Room): RoomStatePublic {
     drawTimerSeconds: room.drawTimerSeconds,
     submitTimerSeconds: room.submitTimerSeconds,
     voteTimerSeconds: room.voteTimerSeconds,
+    revealTimerSeconds: room.revealTimerSeconds,
     useExtraPrompt: room.useExtraPrompt,
+    useCustomPrompts: room.useCustomPrompts,
+    customPromptsOnly: room.customPromptsOnly,
+    customPrompts: room.customPrompts,
+    enableStrokeReplay: room.enableStrokeReplay,
     useRandomTricks: room.useRandomTricks,
     sameTrickForAll: room.sameTrickForAll,
     selectedTrick: room.selectedTrick,
@@ -274,7 +385,6 @@ export function toPublicState(room: Room): RoomStatePublic {
     } else if (currentDrawing) {
       base.vote = {
         drawerId: currentDrawing.drawerId,
-        prompt: currentDrawing.prompt,
         imageDataUrl: currentDrawing.imageDataUrl || "",
         trick: currentDrawing.trick,
         options: room.options.map((o) => ({ id: o.id, text: o.text })),
@@ -358,11 +468,32 @@ export function toPublicState(room: Room): RoomStatePublic {
   }
 
   if (room.gameType === "fake_artist" && room.questionMasterId && room.fakeArtistId) {
+    const isPreReveal =
+      room.phase === "category" ||
+      room.phase === "draw_shared" ||
+      room.phase === "accuse" ||
+      room.phase === "fake_votes" ||
+      room.phase === "guess";
+    const isPreCatch =
+      room.phase === "category" ||
+      room.phase === "draw_shared" ||
+      room.phase === "accuse";
+
+    const viewer = viewerId ? room.playersById.get(viewerId) : undefined;
+    const hideSecretWord =
+      viewerId !== undefined &&
+      isPreReveal &&
+      (viewerId === room.fakeArtistId || Boolean(viewer?.isSpectator));
+    const hideFakeArtistIdentity =
+      viewerId !== undefined &&
+      isPreCatch &&
+      viewerId !== room.fakeArtistId;
+
     const fa: NonNullable<RoomStatePublic["fakeArtist"]> = {
       questionMasterId: room.questionMasterId,
-      fakeArtistId: room.fakeArtistId,
+      fakeArtistId: hideFakeArtistIdentity ? "" : room.fakeArtistId,
       category: room.category,
-      word: room.word, // We'll filter this in App.tsx or similar based on role
+      word: hideSecretWord ? undefined : room.word,
       activePlayerId: room.activePlayerId,
       turnNumber: room.turnNumber,
       sharedDrawingUrl: room.sharedDrawingUrl,
@@ -474,7 +605,12 @@ export function ensureLobby(room: Room) {
   room.clueByPlayerId.clear();
   room.options = [];
   room.voteByVoterId.clear();
+  room.likedOptionIdsByVoterId.clear();
+  room.comedyLikesReceived.clear();
   room.reveal = undefined;
+  room.chaosDrawings = [];
+  room.chaosVotesByVoterId.clear();
+  room.chaosReveal = undefined;
   room.usedPrompts.clear();
   room.allDrawingsHistory = [];
   room.fakeVotesTricked.clear();
@@ -507,7 +643,7 @@ function computeRevealOrder(room: Room, players: PlayerId[], round: number): Pla
   return shuffle(players);
 }
 
-export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; useExtraPrompt?: boolean; useRandomTricks?: boolean; sameTrickForAll?: boolean; selectedTrick?: import("./gameTypes.js").TrickType | "random"; finalChaosRound?: boolean; fakeArtistInkLimit?: boolean; fakeArtistInkBudget?: number; fakeArtistWordPack?: string; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean }) {
+export function startGame(room: Room, options: { gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; revealTimerSeconds?: number; useExtraPrompt?: boolean; useCustomPrompts?: boolean; customPromptsOnly?: boolean; customPrompts?: string[]; enableStrokeReplay?: boolean; useRandomTricks?: boolean; sameTrickForAll?: boolean; selectedTrick?: import("./gameTypes.js").TrickType | "random"; finalChaosRound?: boolean; fakeArtistInkLimit?: boolean; fakeArtistInkBudget?: number; fakeArtistWordPack?: string; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean }) {
   room.round = 1;
   room.gameType = options.gameType || "drawful";
   room.totalRounds = options.totalRounds !== undefined ? options.totalRounds : room.totalRounds;
@@ -515,7 +651,12 @@ export function startGame(room: Room, options: { gameType?: "drawful" | "fake_ar
   room.drawTimerSeconds = options.drawTimerSeconds !== undefined ? options.drawTimerSeconds : room.drawTimerSeconds;
   room.submitTimerSeconds = options.submitTimerSeconds !== undefined ? options.submitTimerSeconds : room.submitTimerSeconds;
   room.voteTimerSeconds = options.voteTimerSeconds !== undefined ? options.voteTimerSeconds : room.voteTimerSeconds;
+  room.revealTimerSeconds = options.revealTimerSeconds !== undefined ? options.revealTimerSeconds : room.revealTimerSeconds;
   room.useExtraPrompt = options.useExtraPrompt || false;
+  if (options.useCustomPrompts !== undefined) room.useCustomPrompts = options.useCustomPrompts;
+  if (options.customPromptsOnly !== undefined) room.customPromptsOnly = options.customPromptsOnly;
+  if (options.customPrompts !== undefined) room.customPrompts = options.customPrompts;
+  if (options.enableStrokeReplay !== undefined) room.enableStrokeReplay = options.enableStrokeReplay;
   room.useRandomTricks = options.useRandomTricks || false;
   room.sameTrickForAll = options.sameTrickForAll || false;
   room.selectedTrick = options.selectedTrick ?? "random";
@@ -527,7 +668,6 @@ export function startGame(room: Room, options: { gameType?: "drawful" | "fake_ar
   room.fakeArtistHighlight = options.fakeArtistHighlight !== undefined ? options.fakeArtistHighlight : true;
   room.fakeArtistRandomizeOrder = options.fakeArtistRandomizeOrder || false;
   room.revealOrder = options.revealOrder || "random";
-  room.usedPrompts.clear();
   room.allDrawingsHistory = [];
   room.fakeVotesTricked.clear();
   room.correctPromptsGuessed.clear();
@@ -545,10 +685,10 @@ export function startGame(room: Room, options: { gameType?: "drawful" | "fake_ar
     room.playerOrder = shuffle(room.playerOrder);
   }
 
-  const playersWithAvatars = listPlayers(room).filter(p => !!p.avatarUrl);
-  const allHaveAvatars = playersWithAvatars.length === room.playersById.size;
+  const activeNonSpectators = listPlayers(room).filter((p) => !p.isSpectator);
+  const allHaveAvatars = activeNonSpectators.length > 0 && activeNonSpectators.every((p) => !!p.avatarUrl);
 
-  if (allHaveAvatars && room.playersById.size > 0) {
+  if (allHaveAvatars) {
     beginRound(room);
   } else {
     room.phase = "avatar";
@@ -590,6 +730,35 @@ export function beginFakeArtistRound(room: Room) {
   room.pointsDeltaByPlayer.clear();
 
   room.phase = "category";
+}
+
+export function tallyFakeArtistAccusation(room: Room) {
+  const votes: Record<string, number> = {};
+  room.votedForId.forEach((tid) => {
+    votes[tid] = (votes[tid] || 0) + 1;
+  });
+
+  let maxVotes = 0;
+  for (const count of Object.values(votes)) {
+    if (count > maxVotes) maxVotes = count;
+  }
+
+  const topSuspects = maxVotes > 0
+    ? Object.entries(votes)
+        .filter(([, count]) => count === maxVotes)
+        .map(([id]) => id)
+    : [];
+
+  // In Fake Artist rules, if there is a tie for top votes, the Fake Artist is NOT caught
+  const caughtId = topSuspects.length === 1 ? topSuspects[0]! : "";
+  room.isFakeArtistCaught = caughtId === room.fakeArtistId;
+
+  if (room.isFakeArtistCaught) {
+    room.phase = "guess";
+  } else {
+    resolveFakeArtistRound(room, true);
+    room.phase = "reveal_fake";
+  }
 }
 
 export function resolveFakeArtistRound(room: Room, fakeArtistWins: boolean) {
@@ -655,15 +824,61 @@ export function allAvatarsSubmitted(room: Room): boolean {
   });
 }
 
+export function pickRoomPrompts(room: Room, count: number): string[] {
+  if (count <= 0) return [];
+  const customPool = room.useCustomPrompts
+    ? room.customPrompts.map((p) => p.trim()).filter((p) => p.length > 0)
+    : [];
+
+  if (customPool.length === 0) {
+    return pickPrompts(count, room.usedPrompts);
+  }
+
+  let unusedCustom = shuffle(customPool.filter((p) => !room.usedPrompts.has(p)));
+
+  if (room.customPromptsOnly) {
+    const picked: string[] = [];
+    for (const p of unusedCustom) {
+      if (picked.length >= count) break;
+      picked.push(p);
+      room.usedPrompts.add(p);
+    }
+
+    // If all custom prompts have been used, reset custom prompts in usedPrompts and draw again
+    if (picked.length < count) {
+      for (const p of customPool) room.usedPrompts.delete(p);
+      const freshCustom = shuffle(customPool.filter((p) => !picked.includes(p)));
+      for (const p of freshCustom) {
+        if (picked.length >= count) break;
+        picked.push(p);
+        room.usedPrompts.add(p);
+      }
+    }
+
+    // If count exceeds total unique custom prompts, fill remainder from standard prompts
+    if (picked.length < count) {
+      const fallback = pickPrompts(count - picked.length, room.usedPrompts);
+      picked.push(...fallback);
+    }
+    return shuffle(picked);
+  }
+
+  // Mix mode: include unused custom prompts mixed with standard prompts
+  const customToTake = Math.min(unusedCustom.length, Math.max(1, Math.ceil(count / 2)));
+  const pickedCustom = unusedCustom.slice(0, customToTake);
+  for (const p of pickedCustom) room.usedPrompts.add(p);
+
+  const remaining = count - pickedCustom.length;
+  const standardPicked = remaining > 0 ? pickPrompts(remaining, room.usedPrompts) : [];
+  return shuffle([...pickedCustom, ...standardPicked]);
+}
+
 export function startRound(room: Room) {
-  const activePlayers = room.playerOrder.filter((id) => {
-    const p = room.playersById.get(id);
-    return p?.connected && !p.isSpectator;
-  });
-  const players = activePlayers.length ? activePlayers : playingPlayerIdsInOrder(room);
+  // Include all non-spectator players in the room so a brief reconnect during round transition never drops a player
+  const playingPlayers = playingPlayerIdsInOrder(room);
   const playerIdsForRound =
-    players.length > 0 ? players : room.playerOrder.filter((id) => room.playersById.has(id));
-  const prompts = pickPrompts(playerIdsForRound.length, room.usedPrompts);
+    playingPlayers.length > 0 ? playingPlayers : room.playerOrder.filter((id) => room.playersById.has(id));
+  const prompts = pickRoomPrompts(room, playerIdsForRound.length);
 
   const isChaosRound = Boolean(room.finalChaosRound && room.round > room.totalRounds);
   const order = isChaosRound ? shuffle(playerIdsForRound) : computeRevealOrder(room, playerIdsForRound, room.round);
@@ -674,51 +889,26 @@ export function startRound(room: Room) {
     promptByPlayer.set(pid, isChaosRound ? sharedChaosPrompt : prompts[idx]!);
   });
 
-  const tricks: Array<import("./gameTypes.js").TrickType> = [
-    "blind",
-    "one_stroke",
-    "large_brush",
-    "random_brush",
-    "half_time",
-    "upside_down",
-    "wobble",
-    "mirror",
-    "ink_limit",
-    "rubberband",
-    "input_delay",
-    "spinning",
-    "glitch",
-    "gravity_drip",
-    "pixel_art",
-    "bubbles",
-    "split_halves",
-    "flashlight",
-    "ice_skater",
-    "typo_stomp",
-    "shadow_finger",
-    "trash_compactor",
-    "puzzle_jumble",
-    "snake_tail",
-    "tractor_beam"
-  ];
-  const specificTrick: import("./gameTypes.js").TrickType | undefined =
+  const specificTrick: TrickType | undefined =
     room.selectedTrick && room.selectedTrick !== "random" ? room.selectedTrick : undefined;
-  const sharedTrick: import("./gameTypes.js").TrickType = specificTrick ?? tricks[Math.floor(Math.random() * tricks.length)]!;
 
-  room.drawings = order.map((drawerId) => {
-    const trick: import("./gameTypes.js").TrickType | undefined = (isChaosRound || !room.useRandomTricks)
-      ? undefined
-      : specificTrick
-      ? specificTrick
-      : room.sameTrickForAll
-      ? sharedTrick
-      : tricks[Math.floor(Math.random() * tricks.length)];
-    return {
-      drawerId,
-      prompt: promptByPlayer.get(drawerId) ?? prompts[0]!,
-      trick
-    };
-  });
+  let roundTricks: Array<TrickType | undefined>;
+  if (isChaosRound || !room.useRandomTricks) {
+    roundTricks = order.map(() => undefined);
+  } else if (specificTrick) {
+    roundTricks = order.map(() => specificTrick);
+  } else if (room.sameTrickForAll) {
+    const sharedTrick = pickTricks(1, room.usedTricks)[0]!;
+    roundTricks = order.map(() => sharedTrick);
+  } else {
+    roundTricks = pickTricks(order.length, room.usedTricks);
+  }
+
+  room.drawings = order.map((drawerId, idx) => ({
+    drawerId,
+    prompt: promptByPlayer.get(drawerId) ?? prompts[0]!,
+    trick: roundTricks[idx]
+  }));
 
   room.drawingIndex = 0;
   room.clueByPlayerId.clear();
@@ -732,14 +922,20 @@ export function startRound(room: Room) {
   room.phase = "draw";
 }
 
-export function submitDrawing(room: Room, drawerId: PlayerId, imageDataUrl: string) {
+export function submitDrawing(room: Room, drawerId: PlayerId, imageDataUrl: string, strokeLog?: StrokeEvent[]) {
   const drawing = room.drawings.find((d) => d.drawerId === drawerId);
   if (!drawing) return;
   drawing.imageDataUrl = imageDataUrl;
+  if (strokeLog && Array.isArray(strokeLog)) {
+    drawing.strokeLog = strokeLog.slice(0, 600);
+  }
 }
 
 export function allDrawingsSubmitted(room: Room): boolean {
-  return room.drawings.length > 0 && room.drawings.every((d) => typeof d.imageDataUrl === "string" && d.imageDataUrl.length > 0);
+  if (room.drawings.length === 0) return false;
+  const connectedDrawings = room.drawings.filter((d) => room.playersById.get(d.drawerId)?.connected);
+  const targetDrawings = connectedDrawings.length > 0 ? connectedDrawings : room.drawings;
+  return targetDrawings.every((d) => typeof d.imageDataUrl === "string" && d.imageDataUrl.length > 0);
 }
 
 export function advanceAfterDraw(room: Room) {
@@ -767,7 +963,8 @@ export function submitClue(room: Room, playerId: PlayerId, text: string) {
 export function allCluesSubmitted(room: Room): boolean {
   const cur = room.drawings[room.drawingIndex];
   if (!cur) return false;
-  const voters = listPlayers(room).filter((p) => p.id !== cur.drawerId && !p.isSpectator);
+  const connectedVoters = listPlayers(room).filter((p) => p.id !== cur.drawerId && !p.isSpectator && p.connected);
+  const voters = connectedVoters.length > 0 ? connectedVoters : listPlayers(room).filter((p) => p.id !== cur.drawerId && !p.isSpectator);
   return voters.length > 0 && voters.every((p) => room.clueByPlayerId.has(p.id));
 }
 
@@ -788,7 +985,8 @@ export function beginChaosVote(room: Room) {
     drawerId: d.drawerId,
     imageDataUrl: d.imageDataUrl || "",
     prompt: d.prompt,
-    trick: d.trick
+    trick: d.trick,
+    strokeLog: d.strokeLog
   }));
   room.chaosVotesByVoterId.clear();
   room.chaosReveal = undefined;
@@ -800,7 +998,8 @@ export function castChaosVote(room: Room, voterId: PlayerId, votes: Record<strin
 }
 
 export function allChaosVotesCast(room: Room): boolean {
-  const voters = listPlayers(room).filter((p) => !p.isSpectator);
+  const connectedVoters = listPlayers(room).filter((p) => !p.isSpectator && p.connected);
+  const voters = connectedVoters.length > 0 ? connectedVoters : listPlayers(room).filter((p) => !p.isSpectator);
   return voters.length > 0 && voters.every((p) => room.chaosVotesByVoterId.has(p.id));
 }
 
@@ -856,6 +1055,7 @@ export function scoreAndRevealChaos(room: Room) {
       drawerColor: drawer?.color || "#ffffff",
       drawerAvatar: drawer?.avatarUrl,
       imageDataUrl: drawing.imageDataUrl,
+      strokeLog: room.enableStrokeReplay ? drawing.strokeLog : undefined,
       guesses
     };
   });
@@ -917,7 +1117,8 @@ export function castVote(room: Room, voterId: PlayerId, optionId: string, likedO
 export function allVotesCast(room: Room): boolean {
   const cur = room.drawings[room.drawingIndex];
   if (!cur) return false;
-  const voters = listPlayers(room).filter((p) => p.id !== cur.drawerId && !p.isSpectator);
+  const connectedVoters = listPlayers(room).filter((p) => p.id !== cur.drawerId && !p.isSpectator && p.connected);
+  const voters = connectedVoters.length > 0 ? connectedVoters : listPlayers(room).filter((p) => p.id !== cur.drawerId && !p.isSpectator);
   return voters.length > 0 && voters.every((p) => room.voteByVoterId.has(p.id));
 }
 
@@ -1023,6 +1224,7 @@ export function scoreAndReveal(room: Room) {
     prompt: cur.prompt,
     imageDataUrl: cur.imageDataUrl,
     trick: cur.trick,
+    strokeLog: room.enableStrokeReplay ? cur.strokeLog : undefined,
     options: optionVotes,
     pointsDeltaByPlayer,
     totalDrawings: room.drawings.length

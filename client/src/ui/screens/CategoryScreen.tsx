@@ -32,6 +32,27 @@ export function CategoryScreen(props: {
   };
 
   const randomIdeas = () => {
+    const customList = props.room.useCustomPrompts ? (props.room.customPrompts ?? []) : [];
+    if (customList.length > 0) {
+      const shuffledCustom = [...customList].sort(() => Math.random() - 0.5);
+      const customHints: CategoryWordHint[] = shuffledCustom.slice(0, 4).map((item) => {
+        const sepIdx = item.indexOf(":") !== -1 ? item.indexOf(":") : item.indexOf("/");
+        if (sepIdx > 0) {
+          return {
+            category: item.slice(0, sepIdx).trim().slice(0, 30) || "Custom",
+            word: item.slice(sepIdx + 1).trim().slice(0, 30) || item.trim().slice(0, 30)
+          };
+        }
+        return { category: "Custom", word: item.trim().slice(0, 30) };
+      });
+      if (props.room.customPromptsOnly || customHints.length >= 4) {
+        setHints(customHints);
+        return;
+      }
+      const standardHints = pickRandomHints(4 - customHints.length, props.room.fakeArtistWordPack);
+      setHints([...customHints, ...standardHints]);
+      return;
+    }
     setHints(pickRandomHints(4, props.room.fakeArtistWordPack));
   };
 
@@ -85,7 +106,18 @@ export function CategoryScreen(props: {
 
         <div className="field" style={{ margin: "clamp(0.4rem, 0.8vh, 0.65rem) 0" }}>
           <label style={{ fontSize: "0.8rem" }}>Secret Word (e.g. Elephant)</label>
-          <input value={word} onChange={(e) => setWord(e.target.value)} placeholder="Elephant" maxLength={30} />
+          <input
+            value={word}
+            onChange={(e) => setWord(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && category.trim() && word.trim()) {
+                e.preventDefault();
+                props.onSubmit(category, word);
+              }
+            }}
+            placeholder="Elephant"
+            maxLength={30}
+          />
         </div>
 
         <div className="row space" style={{ marginTop: "0.5rem", flexWrap: "wrap", gap: "8px" }}>

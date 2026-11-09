@@ -10,6 +10,7 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
   const isHost = room.hostId === meId;
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => {
     const doHealthCheck = async () => {
@@ -150,7 +151,21 @@ export function Sidebar(props: { room: RoomState; meId: string; onStop?: () => v
 
       <div className="sidebar-header" style={{ paddingBottom: "0.5rem" }}>
         <div>
-          <h3 style={{ marginBottom: "2px", fontSize: "1.1rem" }}>Game Status</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <h3 style={{ marginBottom: "2px", fontSize: "1.1rem" }}>Game Status</h3>
+            <span
+              className="tag"
+              style={{ cursor: "pointer", fontSize: "0.68rem", padding: "2px 7px" }}
+              onClick={() => {
+                navigator.clipboard.writeText(room.roomCode);
+                setCopiedCode(true);
+                setTimeout(() => setCopiedCode(false), 1800);
+              }}
+              title="Click to copy room code"
+            >
+              {copiedCode ? "✓ Copied" : `#${room.roomCode}`}
+            </span>
+          </div>
           {room.phase !== "lobby" && room.phase !== "game_over" && (
             room.round > room.totalRounds ? (
               <div className="muted small" style={{ color: "#f59e0b", fontWeight: 700 }}>🔥 Final Chaos Round</div>

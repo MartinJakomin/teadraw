@@ -51,13 +51,19 @@ export type TrickType =
   | "trash_compactor"
   | "puzzle_jumble"
   | "snake_tail"
-  | "tractor_beam";
+  | "tractor_beam"
+  | "cubism"
+  | "spiderweb"
+  | "magnets"
+  | "wind_tunnel"
+  | "poltergeist";
 
 export type Drawing = {
   drawerId: PlayerId;
   prompt: string;
   imageDataUrl?: string;
   trick?: TrickType;
+  strokeLog?: StrokeEvent[];
 };
 
 export type Option = {
@@ -73,6 +79,7 @@ export type Reveal = {
   prompt: string;
   imageDataUrl: string;
   trick?: TrickType;
+  strokeLog?: StrokeEvent[];
   options: Array<{
     id: string;
     text: string;
@@ -114,6 +121,7 @@ export type ChaosRevealDrawing = {
   drawerColor: string;
   drawerAvatar?: string;
   imageDataUrl: string;
+  strokeLog?: StrokeEvent[];
   guesses: Array<{
     voterId: PlayerId;
     voterName: string;
@@ -144,7 +152,12 @@ export type RoomStatePublic = {
   drawTimerSeconds?: number;
   submitTimerSeconds?: number;
   voteTimerSeconds?: number;
+  revealTimerSeconds?: number;
   useExtraPrompt: boolean;
+  useCustomPrompts?: boolean;
+  customPromptsOnly?: boolean;
+  customPrompts?: string[];
+  enableStrokeReplay?: boolean;
   useRandomTricks?: boolean;
   sameTrickForAll?: boolean;
   selectedTrick?: TrickType | "random";

@@ -25,7 +25,8 @@ const LS = {
   name: "teadraw:name",
   roomCode: "teadraw:roomCode",
   playerId: "teadraw:playerId",
-  prompt: "teadraw:prompt"
+  prompt: "teadraw:prompt",
+  trick: "teadraw:trick"
 } as const;
 
 function load(key: string) {
@@ -63,7 +64,10 @@ export function App() {
   const [roomCode, setRoomCode] = useState(() => load(LS.roomCode));
   const [playerId, setPlayerId] = useState(() => load(LS.playerId));
   const [prompt, setPrompt] = useState(() => load(LS.prompt));
-  const [trick, setTrick] = useState<import("../types").TrickType | undefined>(undefined);
+  const [trick, setTrick] = useState<import("../types").TrickType | undefined>(() => {
+    const saved = load(LS.trick);
+    return saved ? (saved as import("../types").TrickType) : undefined;
+  });
   const [error, setError] = useState<string>("");
   const [socketConnected, setSocketConnected] = useState(socket.connected);
   const [inPractice, setInPractice] = useState(false);
@@ -79,6 +83,26 @@ export function App() {
   useEffect(() => { nameRef.current = name; }, [name]);
   useEffect(() => { roomRef.current = room; }, [room]);
 
+  const applyJoinResponse = useCallback((resp: any) => {
+    if (resp?.ok && resp?.playerId) {
+      setPlayerId(resp.playerId);
+      save(LS.playerId, resp.playerId);
+      if (resp.roomCode) {
+        setRoomCode(resp.roomCode);
+        save(LS.roomCode, resp.roomCode);
+      }
+      if (typeof resp.prompt === "string") {
+        setPrompt(resp.prompt);
+        save(LS.prompt, resp.prompt);
+      }
+      if (resp.trick !== undefined) {
+        setTrick(resp.trick);
+        save(LS.trick, resp.trick || "");
+      }
+      setShowTitle(false);
+    }
+  }, []);
+
   useEffect(() => {
     const hashMatch = window.location.hash.match(/(?:code|room)?=?([A-Za-z0-9]{4})/i);
     const searchMatch = window.location.search.match(/[?&](?:code|room)=([A-Za-z0-9]{4})/i);
@@ -91,16 +115,34 @@ export function App() {
         setShowTitle(false);
         const existingPid = load(LS.playerId) || undefined;
         socket.emit("room:join", { roomCode: codeFromUrl, name: savedName.trim(), playerId: existingPid }, (resp: any) => {
-          if (resp?.ok && resp?.playerId) {
-            setPlayerId(resp.playerId);
-            save(LS.playerId, resp.playerId);
+          if (resp?.ok) {
+            applyJoinResponse(resp);
           } else if (resp?.error) {
             setError(resp.error);
           }
         });
       }
+      return;
     }
-  }, [socket]);
+
+    // If user reloaded page while in an active room, attempt seamless rejoin
+    const savedCode = load(LS.roomCode);
+    const savedPid = load(LS.playerId);
+    const savedName = load(LS.name);
+    if (savedCode && savedCode.length === 4 && savedPid && savedName.trim().length > 0) {
+      socket.emit("room:join", { roomCode: savedCode, name: savedName.trim(), playerId: savedPid }, (resp: any) => {
+        if (resp?.ok) {
+          applyJoinResponse(resp);
+        } else {
+          // Room no longer exists -> clear stale session
+          save(LS.roomCode, "");
+          save(LS.playerId, "");
+          save(LS.prompt, "");
+          save(LS.trick, "");
+        }
+      });
+    }
+  }, [socket, applyJoinResponse]);
 
   // Reset to home screen when room is gone (e.g. server restarted)
   const resetToHome = useCallback(() => {
@@ -115,22 +157,28 @@ export function App() {
       setPrompt(p);
       setTrick(t);
       save(LS.prompt, p);
+      save(LS.trick, t ?? "");
     };
 
-    const onConnect = () => {
-      setSocketConnected(true);
-      // Auto-rejoin room if we were in one before disconnect
+    const attemptRejoin = () => {
       const code = roomCodeRef.current;
       const pid = playerIdRef.current;
       const n = nameRef.current;
-      if (code && pid && roomRef.current) {
-        socket.emit("room:join", { roomCode: code, name: n, playerId: pid }, (resp: any) => {
-          if (!resp?.ok) {
-            // Room no longer exists (server restarted) → reset to home
+      if (code && pid && n.trim().length > 0) {
+        socket.emit("room:join", { roomCode: code, name: n.trim(), playerId: pid }, (resp: any) => {
+          if (resp?.ok) {
+            applyJoinResponse(resp);
+          } else if (roomRef.current) {
+            // Room no longer exists (server restarted) -> reset to home
             resetToHome();
           }
         });
       }
+    };
+
+    const onConnect = () => {
+      setSocketConnected(true);
+      attemptRejoin();
     };
 
     const onDisconnect = () => {
@@ -142,19 +190,27 @@ export function App() {
       setError("You have been kicked from the room.");
     };
 
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible" && socket.connected && roomRef.current) {
+        attemptRejoin();
+      }
+    };
+
     socket.on("room:state", onState);
     socket.on("prompt:you", onPrompt);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("room:kicked", onKicked);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       socket.off("room:state", onState);
       socket.off("prompt:you", onPrompt);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("room:kicked", onKicked);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [socket, resetToHome]);
+  }, [socket, resetToHome, applyJoinResponse]);
 
   useEffect(() => {
     save(LS.name, name);
@@ -176,6 +232,9 @@ export function App() {
 
   useEffect(() => {
     if (room?.phase && room.phase !== lastPhase.current) {
+      if (room.phase === "submit" || room.phase === "draw" || room.phase === "lobby") {
+        save("teadraw:myClue", "");
+      }
       setFlashKey((k) => k + 1);
       lastPhase.current = room.phase;
     }
@@ -191,9 +250,12 @@ export function App() {
     setRoom(null);
     setRoomCode("");
     setPlayerId("");
+    setPrompt("");
+    setTrick(undefined);
     save(LS.roomCode, "");
     save(LS.playerId, "");
     save(LS.prompt, "");
+    save(LS.trick, "");
   };
 
   const kickPlayer = (targetId: string) => {
@@ -234,8 +296,7 @@ export function App() {
           setError("");
           socket.emit("room:join", { roomCode, name, playerId: playerId || undefined }, (resp: any) => {
             if (!resp?.ok) return setError(resp?.error ?? "Failed to join room");
-            setRoomCode(resp.roomCode);
-            setPlayerId(resp.playerId);
+            applyJoinResponse(resp);
           });
         }}
         onPractice={() => setInPractice(true)}
@@ -292,7 +353,9 @@ export function App() {
             me={me}
             prompt={prompt}
             trick={trick}
-            onSubmit={(imageDataUrl) => socket.emit("draw:submit", { roomCode: room.roomCode, playerId, imageDataUrl })}
+            onSubmit={(imageDataUrl, strokes) =>
+              socket.emit("draw:submit", { roomCode: room.roomCode, playerId, imageDataUrl, strokes })
+            }
           />
         );
 

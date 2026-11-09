@@ -35,14 +35,22 @@ npm start
 ---
 
 ## 🎨 Game Mode: Drawful
-A game of drawing and deception.
+A game of drawing, party tricks, and deception.
 
 ### How to play
-1. Each player receives a unique, secret prompt (e.g., "The sound of one hand clapping").
-2. Everyone draws their prompt.
-3. One by one, the drawings are shown. 
+1. Each player receives a unique, secret prompt (e.g., "The sound of one hand clapping") and an optional **Party Trick** modifier.
+2. Everyone draws their prompt on the `900 × 550` canvas.
+3. One by one, the drawings are revealed (with optional **Time-Lapse Stroke Replay**).
 4. Players (except the drawer) submit fake prompts that they think look like the drawing.
-5. Everyone then votes on what they think the **real** prompt was.
+5. Everyone then votes on what they think the **real** prompt was (and can award 😂 **Comedy Likes** to their favorite bluffs).
+6. Optional **🔥 Final Chaos Round**: Everyone draws the *same* secret prompt simultaneously and votes in secret on who drew which masterpiece!
+
+### 30 Party Tricks (`useRandomTricks`)
+- 🙈 **Blind Draw** (`blind`) • ✍️ **One Continuous Line** (`one_stroke`) • 🖌️ **Mega Marker** (`large_brush`) • 🎲 **Wildcard Brush Size** (`random_brush`) • ⚡ **Speed Draw** (`half_time`) • 🙃 **Upside-Down Canvas** (`upside_down`) • 〰️ **Earthquake Wobble** (`wobble`) • 🪞 **Kaleidoscope Mirror** (`mirror`) • 💧 **Strict Ink Ration** (`ink_limit`) • 🏹 **Slingshot Fling** (`rubberband`) • ⏳ **Time-Lag Brush** (`input_delay`) • 🎡 **Spinning Canvas** (`spinning`) • 👾 **Glitch Teleport** (`glitch`) • 🫠 **Melting Paint** (`gravity_drip`) • 👾 **8-Bit Pixelizer** (`pixel_art`) • 🫧 **Bubble Blower** (`bubbles`) • 🪚 **Guillotine Chop** (`split_halves`) • 🔦 **Flashlight Blackout** (`flashlight`) • ⛸️ **Ice Skater** (`ice_skater`) • ⌨️ **Ransom Note Stamp** (`typo_stomp`) • 🖐️ **Giant Thumb** (`shadow_finger`) • 🗜️ **Trash Compactor** (`trash_compactor`) • 🧩 **Puzzle Jumble** (`puzzle_jumble`) • 🐍 **Slithering Snake** (`snake_tail`) • 🛸 **Alien Vaporizer** (`tractor_beam`) • 🔺 **Polygon Cubism** (`cubism`) • 🕸️ **Spiderweb Threads** (`spiderweb`) • 🧲 **Magnet Anomaly** (`magnets`) • 🌬️ **Wind Tunnel** (`wind_tunnel`) • 👻 **Poltergeist Brush** (`poltergeist`)
+
+### Custom Prompts & Practice Sandbox
+- **📝 Custom Prompts**: Hosts can paste custom prompts (`1 per line`, up to 200) and choose either **Mix with standard prompts** or **Play ONLY custom prompts** (also usable as `Category: Word` pairs in Fake Artist).
+- **🎯 Practice Sandbox**: Test and master all 30 tricks solo right from the Home or Lobby screen.
 
 ### Scoring (Dixit-style)
 - **Drawer**: Gets **+3 points** if at least one person (but not everyone) guesses the real prompt.

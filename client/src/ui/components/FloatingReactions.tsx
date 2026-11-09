@@ -11,6 +11,7 @@ type FloatingEmote = {
 
 export function FloatingReactions(props: { socket: Socket; roomCode?: string; playerId?: string }) {
   const [emotes, setEmotes] = useState<FloatingEmote[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
   const reactions = ["😂", "🔥", "😱", "👏", "🎨", "💯", "💀", "🤯", "💩", "🥳", "❤️", "👀", "🤡", "🚀", "🤔", "👑", "⏳"];
 
   useEffect(() => {
@@ -103,8 +104,8 @@ export function FloatingReactions(props: { socket: Socket; roomCode?: string; pl
             zIndex: 9000,
             display: "flex",
             alignItems: "center",
-            gap: "5px",
-            padding: "5px 12px",
+            gap: "4px",
+            padding: collapsed ? "6px 10px" : "5px 12px",
             borderRadius: "99px",
             background: "rgba(15, 23, 42, 0.88)",
             backdropFilter: "blur(18px)",
@@ -114,29 +115,51 @@ export function FloatingReactions(props: { socket: Socket; roomCode?: string; pl
             scrollbarWidth: "none"
           }}
         >
-          {reactions.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => sendReaction(emoji)}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: "clamp(1.3rem, 1.6vw, 1.5rem)",
-                lineHeight: 1,
-                cursor: "pointer",
-                padding: "4px 6px",
-                borderRadius: "50%",
-                transition: "transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-              className="reaction-btn"
-              title={`Send ${emoji} reaction`}
-            >
-              {emoji}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            style={{
+              background: "rgba(255, 255, 255, 0.08)",
+              border: "1px solid rgba(255, 255, 255, 0.14)",
+              color: "#fff",
+              fontSize: "0.78rem",
+              fontWeight: 800,
+              cursor: "pointer",
+              padding: "4px 8px",
+              borderRadius: "99px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              flexShrink: 0
+            }}
+            title={collapsed ? "Expand reactions" : "Minimize reactions"}
+          >
+            {collapsed ? "😄 React" : "✕"}
+          </button>
+          {!collapsed &&
+            reactions.map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => sendReaction(emoji)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "clamp(1.3rem, 1.6vw, 1.5rem)",
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  padding: "4px 6px",
+                  borderRadius: "50%",
+                  transition: "transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+                className="reaction-btn"
+                title={`Send ${emoji} reaction`}
+              >
+                {emoji}
+              </button>
+            ))}
         </div>
       )}
     </>

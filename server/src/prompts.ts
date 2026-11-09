@@ -1340,20 +1340,38 @@ export const PROMPTS: string[] = [
   "Zombie using wrinkle cream"
 ];
 
-export function pickPrompts(count: number, usedPrompts?: Set<string>): string[] {
-  let pool = [...PROMPTS];
-  if (usedPrompts) {
-    pool = pool.filter(p => !usedPrompts.has(p));
-  }
-
-  for (let i = pool.length - 1; i > 0; i--) {
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
+
+export function pickPrompts(count: number, usedPrompts?: Set<string>): string[] {
+  let available = usedPrompts ? PROMPTS.filter((p) => !usedPrompts.has(p)) : [...PROMPTS];
+  available = shuffleArray(available);
+
+  if (available.length < count) {
+    const picked = [...available];
+    if (usedPrompts) {
+      usedPrompts.clear();
+      for (const p of picked) usedPrompts.add(p);
+    }
+    const remainingPool = shuffleArray(PROMPTS.filter((p) => !picked.includes(p)));
+    while (picked.length < count && remainingPool.length > 0) {
+      const next = remainingPool.pop()!;
+      picked.push(next);
+      usedPrompts?.add(next);
+    }
+    while (picked.length < count) {
+      picked.push(PROMPTS[Math.floor(Math.random() * PROMPTS.length)]!);
+    }
+    return picked;
   }
 
-  while (pool.length < count) pool.push(...PROMPTS);
-
-  const picked = pool.slice(0, count);
+  const picked = available.slice(0, count);
   if (usedPrompts) {
     for (const p of picked) usedPrompts.add(p);
   }

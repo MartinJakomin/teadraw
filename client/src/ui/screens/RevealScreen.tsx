@@ -1,6 +1,223 @@
-import React, { useMemo } from "react";
-import type { Reveal, RoomState } from "../../types";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { Reveal, RoomState, StrokeEvent, TrickType } from "../../types";
 import { TrickBadge } from "../components/TrickBadge";
+
+function StrokeReplayDisplay(props: {
+  imageDataUrl: string;
+  strokeLog?: StrokeEvent[];
+  trick?: TrickType;
+  enableReplay: boolean;
+  imgClassName?: string;
+}) {
+  const hasStrokes = Boolean(props.enableReplay && props.strokeLog && props.strokeLog.length > 0);
+  const [isReplaying, setIsReplaying] = useState(hasStrokes);
+  const [replayRunId, setReplayRunId] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const shouldPlay = Boolean(props.enableReplay && props.strokeLog && props.strokeLog.length > 0);
+    setIsReplaying(shouldPlay);
+    if (shouldPlay) setReplayRunId((r) => r + 1);
+  }, [props.imageDataUrl, props.enableReplay, props.strokeLog]);
+
+  useEffect(() => {
+    if (!isReplaying || !props.strokeLog || props.strokeLog.length === 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const strokes = props.strokeLog;
+    const totalPoints = strokes.reduce((acc, s) => acc + Math.max(1, s.points.length), 0);
+    const durationMs = Math.min(3600, Math.max(1400, totalPoints * 12));
+    const startTime = performance.now();
+    let rafId = 0;
+
+    const renderFrame = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / durationMs);
+      const targetPoints = Math.max(1, Math.floor(progress * totalPoints));
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      let drawnPoints = 0;
+      for (const s of strokes) {
+        if (drawnPoints >= targetPoints) break;
+        const pts = s.points;
+        if (pts.length === 0) continue;
+
+        const takeCount = Math.min(pts.length, targetPoints - drawnPoints);
+        drawnPoints += takeCount;
+
+        const colorStr = `rgb(${s.color.r},${s.color.g},${s.color.b})`;
+        ctx.save();
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = colorStr;
+        ctx.fillStyle = colorStr;
+        ctx.lineWidth = s.brushSize;
+        ctx.globalAlpha = s.opacity ?? 1;
+
+        if (props.trick === "pixel_art") {
+          const gridSize = 32;
+          for (let i = 0; i < takeCount; i++) {
+            const p = pts[i]!;
+            const gx = Math.floor(p.x / gridSize) * gridSize;
+            const gy = Math.floor(p.y / gridSize) * gridSize;
+            ctx.fillRect(gx, gy, gridSize, gridSize);
+          }
+        } else if (takeCount === 1) {
+          ctx.beginPath();
+          ctx.arc(pts[0]!.x, pts[0]!.y, s.brushSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(pts[0]!.x, pts[0]!.y);
+          for (let i = 1; i < takeCount; i++) {
+            ctx.lineTo(pts[i]!.x, pts[i]!.y);
+          }
+          if (props.trick === "cubism" && takeCount === pts.length && pts.length >= 3) {
+            ctx.closePath();
+            ctx.globalAlpha = (s.opacity ?? 1) * 0.28;
+            ctx.fill();
+            ctx.globalAlpha = s.opacity ?? 1;
+          }
+          ctx.stroke();
+
+          if (props.trick === "spiderweb" && takeCount > 4) {
+            ctx.lineWidth = Math.max(0.9, s.brushSize * 0.14);
+            ctx.globalAlpha = (s.opacity ?? 1) * 0.28;
+            ctx.beginPath();
+            for (let i = 3; i < takeCount; i += 3) {
+              const pt = pts[i]!;
+              const linked: Array<{ x: number; y: number }> = [];
+              for (let j = i - 5; j >= 0 && linked.length < 6; j -= 4) {
+                const prevPt = pts[j]!;
+                const d = Math.hypot(pt.x - prevPt.x, pt.y - prevPt.y);
+                if (d >= 18 && d <= 148) {
+                  ctx.moveTo(pt.x, pt.y);
+                  ctx.lineTo(prevPt.x, prevPt.y);
+                  linked.push(prevPt);
+                }
+              }
+              if (linked.length >= 2) {
+                for (let k = 0; k < Math.min(linked.length - 1, 3); k++) {
+                  const a = linked[k]!;
+                  const b = linked[k + 1]!;
+                  for (const ratio of [0.38, 0.72]) {
+                    ctx.moveTo(pt.x + (a.x - pt.x) * ratio, pt.y + (a.y - pt.y) * ratio);
+                    ctx.lineTo(pt.x + (b.x - pt.x) * ratio, pt.y + (b.y - pt.y) * ratio);
+                  }
+                }
+              }
+            }
+            ctx.stroke();
+
+            // Draw perched & hanging spiders along the replayed web every 14 points
+            for (let i = 14; i < takeCount; i += 14) {
+              const anchor = pts[i]!;
+              const hanging = i % 28 === 0;
+              const dropLen = hanging ? 36 + (i % 24) : 0;
+              const sx = anchor.x;
+              const sy = Math.min(canvas.height - 12, anchor.y + dropLen);
+              ctx.save();
+              ctx.globalAlpha = 0.92;
+              if (hanging) {
+                ctx.strokeStyle = "rgba(100, 116, 139, 0.7)";
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(anchor.x, anchor.y);
+                ctx.lineTo(sx, sy);
+                ctx.stroke();
+              }
+              ctx.strokeStyle = "#1e293b";
+              ctx.lineWidth = 1.4;
+              for (const side of [-1, 1]) {
+                for (let leg = 0; leg < 4; leg++) {
+                  const spread = (leg - 1.5) * 0.42;
+                  ctx.beginPath();
+                  ctx.moveTo(sx, sy);
+                  ctx.lineTo(sx + side * 6, sy + spread * 5 - 2);
+                  ctx.lineTo(sx + side * 10, sy + spread * 9 + 2);
+                  ctx.stroke();
+                }
+              }
+              ctx.fillStyle = "#0f172a";
+              ctx.beginPath();
+              ctx.arc(sx, sy, 3.8, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = "#ef4444";
+              ctx.beginPath();
+              ctx.arc(sx, sy - 1, 1.3, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+        }
+        ctx.restore();
+      }
+
+      if (progress < 1) {
+        rafId = requestAnimationFrame(renderFrame);
+      } else {
+        setIsReplaying(false);
+      }
+    };
+
+    rafId = requestAnimationFrame(renderFrame);
+    return () => cancelAnimationFrame(rafId);
+  }, [isReplaying, replayRunId, props.strokeLog, props.trick]);
+
+  const cls = props.imgClassName ?? "img reveal-img";
+
+  return (
+    <div style={{ position: "relative", width: "100%" }}>
+      {isReplaying ? (
+        <canvas
+          ref={canvasRef}
+          width={900}
+          height={550}
+          className={cls}
+        />
+      ) : (
+        <img className={cls} src={props.imageDataUrl} alt="drawing" />
+      )}
+
+      {hasStrokes && (
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            if (isReplaying) {
+              setIsReplaying(false);
+            } else {
+              setIsReplaying(true);
+              setReplayRunId((r) => r + 1);
+            }
+          }}
+          style={{
+            position: "absolute",
+            bottom: "10px",
+            right: "14px",
+            padding: "5px 12px",
+            fontSize: "0.76rem",
+            fontWeight: 800,
+            borderRadius: "999px",
+            background: "rgba(15, 23, 42, 0.85)",
+            border: "1px solid rgba(168, 85, 247, 0.55)",
+            color: "#e9d5ff",
+            backdropFilter: "blur(6px)",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.35)"
+          }}
+          title={isReplaying ? "Skip to final image" : "Watch time-lapse stroke replay"}
+        >
+          {isReplaying ? "⏭️ Show Final" : "🎬 Replay Strokes"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function RevealScreen(props: {
   room: RoomState;
@@ -24,6 +241,21 @@ export function RevealScreen(props: {
 
   const isChaos = Boolean(props.room.finalChaosRound && props.room.round > props.room.totalRounds);
   const sorted = [...props.room.players].sort((a, b) => b.score - a.score);
+
+  const [revealTimeLeft, setRevealTimeLeft] = useState<number | null>(null);
+  useEffect(() => {
+    if (!props.room.endTime) {
+      setRevealTimeLeft(null);
+      return;
+    }
+    const update = () => {
+      const rem = Math.max(0, Math.ceil((props.room.endTime! - Date.now()) / 1000));
+      setRevealTimeLeft(rem);
+    };
+    update();
+    const id = setInterval(update, 250);
+    return () => clearInterval(id);
+  }, [props.room.endTime, props.reveal?.drawingIndex, props.room.round]);
 
   // --- Grand Chaos Reveal Screen ---
   if (isChaos && props.room.chaosReveal) {
@@ -49,10 +281,12 @@ export function RevealScreen(props: {
                   background: "linear-gradient(135deg, #f97316, #ef4444)"
                 }}
               >
-                Finish Game 🏆
+                Finish Game 🏆{revealTimeLeft !== null ? ` (${revealTimeLeft}s)` : ""}
               </button>
             ) : (
-              <div className="muted">Waiting for host to continue…</div>
+              <div className="muted">
+                {revealTimeLeft !== null ? `⏱️ Auto-finishing in ${revealTimeLeft}s…` : "Waiting for host to continue…"}
+              </div>
             )}
           </div>
 
@@ -115,7 +349,12 @@ export function RevealScreen(props: {
                       <span className="chaos-drawing-badge">#{i + 1}</span>
                     </div>
 
-                    <img src={d.imageDataUrl} alt={`Art by ${d.drawerName}`} className="chaos-drawing-img" />
+                    <StrokeReplayDisplay
+                      imageDataUrl={d.imageDataUrl}
+                      strokeLog={d.strokeLog}
+                      enableReplay={props.room.enableStrokeReplay !== false}
+                      imgClassName="chaos-drawing-img"
+                    />
 
                     <div>
                       <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "rgba(255, 255, 255, 0.7)", marginBottom: "6px" }}>
@@ -219,16 +458,23 @@ export function RevealScreen(props: {
           </div>
           {props.isHost && !props.me.isSpectator ? (
             <button className="btn primary" onClick={props.onNext}>
-              {nextButtonLabel}
+              {nextButtonLabel}{revealTimeLeft !== null ? ` (${revealTimeLeft}s)` : ""}
             </button>
           ) : (
-            <div className="muted small">Waiting for host…</div>
+            <div className="muted small">
+              {revealTimeLeft !== null ? `⏱️ Next in ${revealTimeLeft}s…` : "Waiting for host…"}
+            </div>
           )}
         </div>
 
         <div className="reveal-content">
           <div className="reveal-main">
-            <img className="img reveal-img" src={props.reveal.imageDataUrl} alt="drawing" />
+            <StrokeReplayDisplay
+              imageDataUrl={props.reveal.imageDataUrl}
+              strokeLog={props.reveal.strokeLog}
+              trick={props.reveal.trick}
+              enableReplay={props.room.enableStrokeReplay !== false}
+            />
 
             <div className="prompt reveal-prompt" style={{ margin: "clamp(0.25rem, 0.6vh, 0.5rem) 0", padding: "6px 14px" }}>
               <div className="muted small">The real prompt was</div>

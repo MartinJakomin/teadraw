@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { RoomState } from "../../types";
+import type { RoomState, StrokeEvent } from "../../types";
 import { CanvasPad } from "../components/CanvasPad";
 
 export function DrawScreen(props: {
@@ -7,7 +7,7 @@ export function DrawScreen(props: {
   me: RoomState["players"][number];
   prompt: string;
   trick?: import("../../types").TrickType;
-  onSubmit: (dataUrl: string) => void;
+  onSubmit: (dataUrl: string, strokes?: StrokeEvent[]) => void;
 }) {
   const alreadySubmitted = useMemo(
     () => props.room.drawing?.submittedBy.includes(props.me.id) ?? false,
@@ -71,6 +71,16 @@ export function DrawScreen(props: {
         return { icon: "🐍", title: "Snake", desc: "Living snake with animated head and rattle tail! When total path length exceeds 3500px, the tail is trimmed in real-time!" };
       case "tractor_beam":
         return { icon: "🛸", title: "Alien Vaporizer", desc: "UFO alert! A flying saucer charges up its vaporizing beam and disintegrates all ink beneath it!" };
+      case "cubism":
+        return { icon: "🔺", title: "Polygon Cubism", desc: "Picasso mode! Every stroke (even straight lines) connects to your earlier strokes to form filled geometric polygons!" };
+      case "spiderweb":
+        return { icon: "🕸️", title: "Spiderweb Threads", desc: "Delicate cobwebs & spiders! Light silky web threads connect nearby strokes while spiders perch and dangle from the silk!" };
+      case "magnets":
+        return { icon: "🧲", title: "Magnet Anomaly", desc: "5 high-power magnetic poles across the canvas warp your brush path and flip polarity every 10 seconds!" };
+      case "wind_tunnel":
+        return { icon: "🌬️", title: "Wind Tunnel", desc: "Fast gusting winds blow your wet ink across the canvas, flipping direction on every alternate stroke!" };
+      case "poltergeist":
+        return { icon: "👻", title: "Poltergeist Ghost", desc: "Haunted canvas! A roaming ghost is always on the canvas, drawing its own segments and erasing your lines!" };
       default:
         return null;
     }
@@ -231,9 +241,9 @@ export function DrawScreen(props: {
             showShades={true}
             endTime={effectiveEndTime}
             trick={props.trick}
-            onSubmit={(url) => {
+            onSubmit={(url, strokes) => {
               if (!url) return;
-              props.onSubmit(url);
+              props.onSubmit(url, strokes);
             }}
           />
         )}

@@ -38,10 +38,10 @@ export function HomeScreen(props: {
           src={logoUrl}
           alt="TeaDraw Logo"
           style={{
-            maxWidth: "clamp(320px, 44vw, 480px)",
+            maxWidth: "clamp(300px, 42vw, 460px)",
             width: "100%",
             height: "auto",
-            marginBottom: "clamp(0.6rem, 1.4vh, 1.2rem)",
+            marginBottom: "clamp(0.6rem, 1.2vh, 1rem)",
             filter: "drop-shadow(0 8px 30px rgba(99, 102, 241, 0.4))"
           }}
         />
@@ -53,8 +53,18 @@ export function HomeScreen(props: {
               style={{ textAlign: "center", fontSize: "1.3rem", padding: "0.75rem 1.2rem", fontWeight: 800, borderRadius: "14px" }}
               value={props.name}
               onChange={(e) => props.setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && props.name.trim()) {
+                  if (props.roomCode.trim().length === 4) {
+                    props.onJoin();
+                  } else {
+                    props.onCreate();
+                  }
+                }
+              }}
               placeholder="Enter your name..."
               maxLength={18}
+              autoFocus
             />
           </div>
         </div>
@@ -87,6 +97,11 @@ export function HomeScreen(props: {
                 style={{ textAlign: "center", letterSpacing: "5px", fontSize: "1.3rem", textTransform: "uppercase", padding: "0.65rem", fontWeight: 900, borderRadius: "14px" }}
                 value={props.roomCode}
                 onChange={(e) => props.setRoomCode(e.target.value.toUpperCase().slice(0, 4))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && props.name.trim() && props.roomCode.trim().length === 4) {
+                    props.onJoin();
+                  }
+                }}
                 placeholder="ABCD"
                 maxLength={4}
                 disabled={!props.name.trim()}

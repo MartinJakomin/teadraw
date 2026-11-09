@@ -35,13 +35,15 @@ import {
   allAvatarsSubmitted,
   startRound,
   beginRound,
+  tallyFakeArtistAccusation,
   resolveFakeArtistRound,
   ensureLobby,
   getFakeArtistArtistOrder,
   toggleSpectator,
-  kickPlayer
+  kickPlayer,
+  cleanupStaleRooms
 } from "./roomStore.js";
-import { pickPrompts } from "./prompts.js";
+import { pickPrompts, generateSmartDecoyPrompt } from "./prompts.js";
 
 // Curated, high-contrast palette arranged so successive joins have maximally separated, vibrant hues
 const DISTINCT_COLORS = [
@@ -171,12 +173,38 @@ app.get("*", (_req, res) => {
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: CLIENT_ORIGIN, credentials: true }
+  cors: { origin: CLIENT_ORIGIN, credentials: true },
+  maxHttpBufferSize: 1e7, // 10 MB to prevent socket drops on complex drawings / stroke payloads
+  pingTimeout: 60000,     // 60s tolerance for mobile browsers dimming/backgrounding
+  pingInterval: 25000,
+  connectionStateRecovery: {
+    maxDisconnectionDuration: 2 * 60 * 1000,
+    skipMiddlewares: true
+  }
 });
+
+// Periodically clean up abandoned rooms to prevent memory leaks
+setInterval(() => {
+  cleanupStaleRooms(30 * 60 * 1000);
+}, 5 * 60 * 1000).unref();
 
 function emitRoom(roomCode: string) {
   const room = getRoom(roomCode);
   if (!room) return;
+  if (
+    room.gameType === "fake_artist" &&
+    (room.phase === "category" ||
+      room.phase === "draw_shared" ||
+      room.phase === "accuse" ||
+      room.phase === "fake_votes" ||
+      room.phase === "guess")
+  ) {
+    for (const p of listPlayers(room)) {
+      if (p.isBot || !p.connected || !p.socketId) continue;
+      io.to(p.socketId).emit("room:state", toPublicState(room, p.id));
+    }
+    return;
+  }
   io.to(roomCode).emit("room:state", toPublicState(room));
 }
 
@@ -226,8 +254,10 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
       } else if (r.phase === "submit") {
         if (r.clueByPlayerId.has(bot.id)) return;
         const cur = r.drawings[r.drawingIndex];
-        if (cur?.drawerId === bot.id) return;
-        const fakeClue = bot.name;
+        if (!cur || cur.drawerId === bot.id) return;
+        const activeClues = new Set(r.drawings.map((d) => d.prompt));
+        for (const c of r.clueByPlayerId.values()) activeClues.add(c);
+        const fakeClue = generateSmartDecoyPrompt(cur.prompt, activeClues, r.usedPrompts);
         submitClue(r, bot.id, fakeClue);
         if (allCluesSubmitted(r)) {
           beginVote(r);
@@ -342,23 +372,7 @@ function triggerBotActions(room: NonNullable<ReturnType<typeof getRoom>>) {
         r.votedForId.set(bot.id, targetId);
 
         if (r.votedForId.size >= artists.length) {
-          const votes: Record<string, number> = {};
-          r.votedForId.forEach(tid => votes[tid] = (votes[tid] || 0) + 1);
-          let maxVotes = 0;
-          let caughtId = "";
-          for (const [id, count] of Object.entries(votes)) {
-            if (count > maxVotes) {
-              maxVotes = count;
-              caughtId = id;
-            }
-          }
-          r.isFakeArtistCaught = (caughtId === r.fakeArtistId);
-          if (r.isFakeArtistCaught) {
-            r.phase = "guess";
-          } else {
-            resolveFakeArtistRound(r, true);
-            r.phase = "reveal_fake";
-          }
+          tallyFakeArtistAccusation(r);
           setupPhaseTimer(r);
         }
         emitRoom(r.roomCode);
@@ -383,6 +397,7 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
   if (room.phase === "draw" || room.phase === "avatar") durationSeconds = room.drawTimerSeconds ?? room.timerSeconds;
   else if (room.phase === "submit") durationSeconds = room.submitTimerSeconds ?? room.timerSeconds;
   else if (room.phase === "vote") durationSeconds = room.voteTimerSeconds ?? room.timerSeconds;
+  else if (room.phase === "reveal" || room.phase === "reveal_fake") durationSeconds = room.revealTimerSeconds ?? 0;
   else if (room.phase === "category") durationSeconds = 30;
   else if (room.phase === "draw_shared") durationSeconds = room.drawTimerSeconds ?? room.timerSeconds;
   else if (room.phase === "accuse") durationSeconds = Math.max(20, room.drawTimerSeconds ?? room.timerSeconds);
@@ -391,6 +406,7 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
 
   if (!durationSeconds || durationSeconds <= 0) return;
 
+  const isRevealPhase = room.phase === "reveal" || room.phase === "reveal_fake";
   room.endTime = Date.now() + durationSeconds * 1000;
   room.timeoutId = setTimeout(() => {
     // Time's up!
@@ -407,6 +423,13 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
         scoreAndRevealChaos(room);
       } else {
         scoreAndReveal(room);
+      }
+    } else if (room.phase === "reveal" || room.phase === "reveal_fake") {
+      const prevRound = room.round;
+      advance(room);
+      const phaseNow = (room as unknown as { phase: string }).phase;
+      if (phaseNow === "draw" && room.round !== prevRound) {
+        emitPrompts(room.roomCode);
       }
     } else if (room.phase === "category") {
       // Auto-submit some category if QM is AFK
@@ -429,31 +452,15 @@ function setupPhaseTimer(room: NonNullable<ReturnType<typeof getRoom>>) {
       }
     } else if (room.phase === "accuse") {
       // Auto-end accusation
-      const artists = getFakeArtistArtistOrder(room);
-      const votes: Record<string, number> = {};
-      room.votedForId.forEach(tid => votes[tid] = (votes[tid] || 0) + 1);
-      let maxVotes = 0;
-      let caughtId = "";
-      for (const [id, count] of Object.entries(votes)) {
-        if (count > maxVotes) {
-          maxVotes = count;
-          caughtId = id;
-        }
-      }
-      room.isFakeArtistCaught = (caughtId === room.fakeArtistId);
-      if (room.isFakeArtistCaught) {
-        room.phase = "guess";
-      } else {
-        resolveFakeArtistRound(room, true);
-        room.phase = "reveal_fake";
-      }
+      tallyFakeArtistAccusation(room);
     } else if (room.phase === "guess") {
+      resolveFakeArtistRound(room, false);
       room.phase = "reveal_fake";
     }
     setupPhaseTimer(room);
     triggerBotActions(room);
     emitRoom(room.roomCode);
-  }, durationSeconds * 1000 + 2500); // 2.5s grace period so client auto-submit fires first cleanly
+  }, durationSeconds * 1000 + (isRevealPhase ? 200 : 2500)); // 2.5s grace period for client auto-submit; immediate transition for reveal
 }
 
 io.on("connection", (socket) => {
@@ -487,15 +494,37 @@ io.on("connection", (socket) => {
         return;
       }
 
-      if (playerId && room.playersById.has(playerId)) {
-        // Reconnect
-        setConnected(room, playerId, true, socket.id);
+      // Check for existing playerId or a disconnected player with the exact same name
+      const cleanName = String(name ?? "").trim().slice(0, 18);
+      let existingId = playerId && room.playersById.has(playerId) ? playerId : undefined;
+      if (!existingId && cleanName) {
+        const offlineSameName = listPlayers(room).find(
+          (p) => !p.isBot && !p.connected && p.name.toLowerCase() === cleanName.toLowerCase()
+        );
+        if (offlineSameName) existingId = offlineSameName.id;
+      }
+
+      if (existingId && room.playersById.has(existingId)) {
+        const existingPlayer = room.playersById.get(existingId)!;
+        const oldSocketId = existingPlayer.socketId;
+        if (oldSocketId && oldSocketId !== socket.id) {
+          const oldSocket = io.sockets.sockets.get(oldSocketId);
+          if (oldSocket) {
+            // Detach playerId from stale socket so its delayed disconnect cannot mark player offline
+            oldSocket.data.playerId = undefined;
+            oldSocket.data.roomCode = undefined;
+            oldSocket.leave(code);
+          }
+        }
+        if (cleanName) existingPlayer.name = cleanName;
+        setConnected(room, existingId, true, socket.id);
+        maybeReassignHost(room);
         socket.join(code);
         socket.data.roomCode = code;
-        socket.data.playerId = playerId;
-        const d = room.drawings.find((x) => x.drawerId === playerId);
+        socket.data.playerId = existingId;
+        const d = room.drawings.find((x) => x.drawerId === existingId);
         if (d) io.to(socket.id).emit("prompt:you", { prompt: d.prompt, trick: d.trick });
-        ack?.({ ok: true, roomCode: code, playerId });
+        ack?.({ ok: true, roomCode: code, playerId: existingId, prompt: d?.prompt, trick: d?.trick });
         emitRoom(code);
         return;
       }
@@ -629,7 +658,12 @@ io.on("connection", (socket) => {
       drawTimerSeconds: room.drawTimerSeconds,
       submitTimerSeconds: room.submitTimerSeconds,
       voteTimerSeconds: room.voteTimerSeconds,
+      revealTimerSeconds: room.revealTimerSeconds,
       useExtraPrompt: room.useExtraPrompt,
+      useCustomPrompts: room.useCustomPrompts,
+      customPromptsOnly: room.customPromptsOnly,
+      customPrompts: room.customPrompts,
+      enableStrokeReplay: room.enableStrokeReplay,
       useRandomTricks: room.useRandomTricks,
       sameTrickForAll: room.sameTrickForAll,
       selectedTrick: room.selectedTrick,
@@ -663,7 +697,7 @@ io.on("connection", (socket) => {
   socket.on(
     "room:updateSettings",
     (
-      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, drawTimerSeconds, submitTimerSeconds, voteTimerSeconds, useExtraPrompt, useRandomTricks, sameTrickForAll, selectedTrick, finalChaosRound, fakeArtistInkLimit, fakeArtistInkBudget, fakeArtistWordPack, lockColors, fakeArtistHighlight, fakeArtistRandomizeOrder, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; useExtraPrompt?: boolean; useRandomTricks?: boolean; sameTrickForAll?: boolean; selectedTrick?: import("./gameTypes.js").TrickType | "random"; finalChaosRound?: boolean; fakeArtistInkLimit?: boolean; fakeArtistInkBudget?: number; fakeArtistWordPack?: string; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean; botCount?: number },
+      { roomCode, playerId, gameType, totalRounds, revealOrder, timerSeconds, drawTimerSeconds, submitTimerSeconds, voteTimerSeconds, revealTimerSeconds, useExtraPrompt, useCustomPrompts, customPromptsOnly, customPrompts, enableStrokeReplay, useRandomTricks, sameTrickForAll, selectedTrick, finalChaosRound, fakeArtistInkLimit, fakeArtistInkBudget, fakeArtistWordPack, lockColors, fakeArtistHighlight, fakeArtistRandomizeOrder, botCount }: { roomCode: string; playerId: string; gameType?: "drawful" | "fake_artist"; totalRounds?: number; revealOrder?: "random" | "round_robin"; timerSeconds?: number; drawTimerSeconds?: number; submitTimerSeconds?: number; voteTimerSeconds?: number; revealTimerSeconds?: number; useExtraPrompt?: boolean; useCustomPrompts?: boolean; customPromptsOnly?: boolean; customPrompts?: string[]; enableStrokeReplay?: boolean; useRandomTricks?: boolean; sameTrickForAll?: boolean; selectedTrick?: import("./gameTypes.js").TrickType | "random"; finalChaosRound?: boolean; fakeArtistInkLimit?: boolean; fakeArtistInkBudget?: number; fakeArtistWordPack?: string; lockColors?: boolean; fakeArtistHighlight?: boolean; fakeArtistRandomizeOrder?: boolean; botCount?: number },
       ack?: (resp: any) => void
     ) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
@@ -684,7 +718,21 @@ io.on("connection", (socket) => {
       if (drawTimerSeconds !== undefined) room.drawTimerSeconds = Number(drawTimerSeconds);
       if (submitTimerSeconds !== undefined) room.submitTimerSeconds = Number(submitTimerSeconds);
       if (voteTimerSeconds !== undefined) room.voteTimerSeconds = Number(voteTimerSeconds);
+      if (revealTimerSeconds !== undefined) room.revealTimerSeconds = Number(revealTimerSeconds);
       if (useExtraPrompt !== undefined) room.useExtraPrompt = Boolean(useExtraPrompt);
+      if (useCustomPrompts !== undefined) room.useCustomPrompts = Boolean(useCustomPrompts);
+      if (customPromptsOnly !== undefined) room.customPromptsOnly = Boolean(customPromptsOnly);
+      if (Array.isArray(customPrompts)) {
+        const sanitized = Array.from(
+          new Set(
+            customPrompts
+              .map((s) => String(s ?? "").trim().slice(0, 80))
+              .filter((s) => s.length > 0)
+          )
+        ).slice(0, 200);
+        room.customPrompts = sanitized;
+      }
+      if (enableStrokeReplay !== undefined) room.enableStrokeReplay = Boolean(enableStrokeReplay);
       if (useRandomTricks !== undefined) room.useRandomTricks = Boolean(useRandomTricks);
       if (sameTrickForAll !== undefined) room.sameTrickForAll = Boolean(sameTrickForAll);
       if (selectedTrick !== undefined) room.selectedTrick = selectedTrick;
@@ -734,13 +782,13 @@ io.on("connection", (socket) => {
 
   socket.on(
     "draw:submit",
-    ({ roomCode, playerId, imageDataUrl }: { roomCode: string; playerId: string; imageDataUrl: string }, ack?: (resp: any) => void) => {
+    ({ roomCode, playerId, imageDataUrl, strokes }: { roomCode: string; playerId: string; imageDataUrl: string; strokes?: StrokeEvent[] }, ack?: (resp: any) => void) => {
       const room = getRoom(String(roomCode ?? "").trim().toUpperCase());
       if (!room) return ack?.({ ok: false, error: "Room not found" });
       if (room.phase !== "draw") {
         const drawing = room.drawings.find((d) => d.drawerId === playerId);
         if (drawing && !drawing.imageDataUrl) {
-          submitDrawing(room, playerId, String(imageDataUrl ?? ""));
+          submitDrawing(room, playerId, String(imageDataUrl ?? ""), Array.isArray(strokes) ? strokes : undefined);
           ack?.({ ok: true, note: "Late submission accepted" });
           emitRoom(room.roomCode);
           return;
@@ -749,7 +797,7 @@ io.on("connection", (socket) => {
       }
       if (room.playersById.get(playerId)?.isSpectator) return ack?.({ ok: false, error: "Spectators cannot submit a drawing." });
 
-      submitDrawing(room, playerId, String(imageDataUrl ?? ""));
+      submitDrawing(room, playerId, String(imageDataUrl ?? ""), Array.isArray(strokes) ? strokes : undefined);
       ack?.({ ok: true });
 
       if (allDrawingsSubmitted(room)) {
@@ -942,26 +990,7 @@ io.on("connection", (socket) => {
 
     const artists = getFakeArtistArtistOrder(room);
     if (room.votedForId.size >= artists.length) {
-      // Tally votes
-      const votes: Record<string, number> = {};
-      room.votedForId.forEach(tid => votes[tid] = (votes[tid] || 0) + 1);
-
-      let maxVotes = 0;
-      let caughtId = "";
-      for (const [id, count] of Object.entries(votes)) {
-        if (count > maxVotes) {
-          maxVotes = count;
-          caughtId = id;
-        }
-      }
-
-      room.isFakeArtistCaught = (caughtId === room.fakeArtistId);
-      if (room.isFakeArtistCaught) {
-        room.phase = "guess";
-      } else {
-        resolveFakeArtistRound(room, true);
-        room.phase = "reveal_fake";
-      }
+      tallyFakeArtistAccusation(room);
       setupPhaseTimer(room);
     }
 
@@ -983,6 +1012,7 @@ io.on("connection", (socket) => {
       room.phase = "reveal_fake";
     }
 
+    setupPhaseTimer(room);
     emitRoom(roomCode);
     triggerBotActions(room);
     ack?.({ ok: true });
@@ -998,6 +1028,7 @@ io.on("connection", (socket) => {
     resolveFakeArtistRound(room, isCorrect);
 
     room.phase = "reveal_fake";
+    setupPhaseTimer(room);
     emitRoom(room.roomCode);
     triggerBotActions(room);
     ack?.({ ok: true });
@@ -1010,9 +1041,58 @@ io.on("connection", (socket) => {
     if (!roomCode || !playerId) return;
     const room = getRoom(roomCode);
     if (!room) return;
+    const player = room.playersById.get(playerId);
+    // Ignore stale socket disconnect if player has already reconnected with a newer socket
+    if (!player || player.socketId !== socket.id) return;
+
     setConnected(room, playerId, false);
-    maybeReassignHost(room);
     emitRoom(room.roomCode);
+
+    // Grace period before reassigning host or auto-advancing phase so brief page reloads / Wi-Fi blips recover seamlessly
+    setTimeout(() => {
+      const r = getRoom(roomCode);
+      if (!r) return;
+      const p = r.playersById.get(playerId);
+      if (!p || p.connected) return; // Player reconnected within grace period!
+
+      maybeReassignHost(r);
+
+      // Check if remaining connected players have all completed the current phase
+      if (r.phase === "avatar" && allAvatarsSubmitted(r)) {
+        beginRound(r);
+        setupPhaseTimer(r);
+        emitPrompts(r.roomCode);
+        triggerBotActions(r);
+      } else if (r.phase === "draw" && allDrawingsSubmitted(r)) {
+        advanceAfterDraw(r);
+        setupPhaseTimer(r);
+        triggerBotActions(r);
+      } else if (r.phase === "submit" && allCluesSubmitted(r)) {
+        beginVote(r);
+        setupPhaseTimer(r);
+        triggerBotActions(r);
+      } else if (r.phase === "vote") {
+        const isChaos = Boolean(r.finalChaosRound && r.round > r.totalRounds);
+        if (isChaos && allChaosVotesCast(r)) {
+          scoreAndRevealChaos(r);
+          setupPhaseTimer(r);
+          triggerBotActions(r);
+        } else if (!isChaos && allVotesCast(r)) {
+          scoreAndReveal(r);
+          setupPhaseTimer(r);
+          triggerBotActions(r);
+        }
+      } else if (r.phase === "accuse") {
+        const connectedArtists = getFakeArtistArtistOrder(r).filter((id) => r.playersById.get(id)?.connected);
+        if (connectedArtists.length > 0 && connectedArtists.every((id) => r.votedForId.has(id))) {
+          tallyFakeArtistAccusation(r);
+          setupPhaseTimer(r);
+          triggerBotActions(r);
+        }
+      }
+
+      emitRoom(r.roomCode);
+    }, 4000);
   });
 });
 

@@ -31,6 +31,22 @@ function distanceSqToSegment(px: number, py: number, x1: number, y1: number, x2:
   return (px - (x1 + t * dx)) ** 2 + (py - (y1 + t * dy)) ** 2;
 }
 
+const SSAA_SAMPLES = [
+  { dx: 0.25, dy: 0.25 },
+  { dx: 0.75, dy: 0.25 },
+  { dx: 0.25, dy: 0.75 },
+  { dx: 0.75, dy: 0.75 }
+] as const;
+
+const rasterCache = new WeakMap<
+  StrokeEvent[],
+  {
+    ownerBuffer: Int32Array;
+    alphaBuffer: Uint8Array;
+    overlayCache: Map<string, string | null>;
+  }
+>();
+
 function rasterizeStrokeInto(
   stroke: StrokeEvent,
   ownerBuffer: Int32Array,
@@ -43,13 +59,15 @@ function rasterizeStrokeInto(
   if (points.length === 0) return;
 
   const radius = brushSize / 2;
+  const radiusSq = radius * radius;
+  const innerRadius = radius - 0.5;
 
-  // If only one point, treat as a tiny segment
-  const segments = points.length === 1
-    ? [{ p1: points[0]!, p2: points[0]! }]
-    : points.slice(0, -1).map((p, i) => ({ p1: p, p2: points[i + 1]! }));
+  const segCount = points.length === 1 ? 1 : points.length - 1;
 
-  for (const { p1, p2 } of segments) {
+  for (let sIdx = 0; sIdx < segCount; sIdx++) {
+    const p1 = points[sIdx]!;
+    const p2 = points.length === 1 ? p1 : points[sIdx + 1]!;
+
     const minX = Math.floor(Math.min(p1.x, p2.x) - radius - 1);
     const maxX = Math.ceil(Math.max(p1.x, p2.x) + radius + 1);
     const minY = Math.floor(Math.min(p1.y, p2.y) - radius - 1);
@@ -62,22 +80,15 @@ function rasterizeStrokeInto(
 
     for (let y = startY; y <= endY; y++) {
       for (let x = startX; x <= endX; x++) {
-        // 4x Super-sampling (SSAA) for extreme precision
-        const samples = [
-          { dx: 0.25, dy: 0.25 },
-          { dx: 0.75, dy: 0.25 },
-          { dx: 0.25, dy: 0.75 },
-          { dx: 0.75, dy: 0.75 },
-        ];
-
         let totalAlpha = 0;
-        for (const s of samples) {
+        for (let k = 0; k < 4; k++) {
+          const s = SSAA_SAMPLES[k]!;
           const dSq = distanceSqToSegment(x + s.dx, y + s.dy, p1.x, p1.y, p2.x, p2.y);
-          if (dSq <= radius ** 2) {
+          if (dSq <= radiusSq) {
             const d = Math.sqrt(dSq);
             let a = 1.0;
-            if (d > radius - 0.5) {
-              a = 1.0 - (d - (radius - 0.5)) / 1.5;
+            if (d > innerRadius) {
+              a = 1.0 - (d - innerRadius) / 1.5;
               a = Math.max(0, Math.min(1, a));
             }
             totalAlpha += a;
@@ -107,16 +118,31 @@ export async function buildAccusedStrokesOverlay(
   const w = 900;
   const h = 550;
 
-  // ownerBuffer tracks which stroke (by index) owns the pixel. -1 means no owner.
-  const ownerBuffer = new Int32Array(w * h).fill(-1);
-  const alphaBuffer = new Uint8Array(w * h);
+  let cached = rasterCache.get(strokeLog);
+  if (!cached) {
+    const ownerBuffer = new Int32Array(w * h).fill(-1);
+    const alphaBuffer = new Uint8Array(w * h);
 
-  // Process all strokes in order (authoritative Z-order)
-  for (let i = 0; i < strokeLog.length; i++) {
-    rasterizeStrokeInto(strokeLog[i]!, ownerBuffer, alphaBuffer, i, w, h);
+    for (let i = 0; i < strokeLog.length; i++) {
+      rasterizeStrokeInto(strokeLog[i]!, ownerBuffer, alphaBuffer, i, w, h);
+    }
+
+    cached = {
+      ownerBuffer,
+      alphaBuffer,
+      overlayCache: new Map()
+    };
+    rasterCache.set(strokeLog, cached);
   }
 
-  // Now build the final transparent overlay
+  const cacheKey = `${accusedPlayerId}:${tint.r},${tint.g},${tint.b}`;
+  if (cached.overlayCache.has(cacheKey)) {
+    return cached.overlayCache.get(cacheKey) ?? null;
+  }
+
+  const { ownerBuffer, alphaBuffer } = cached;
+
+  // Build the final transparent overlay
   const outC = document.createElement("canvas");
   outC.width = w;
   outC.height = h;
@@ -140,6 +166,8 @@ export async function buildAccusedStrokesOverlay(
   }
 
   octx.putImageData(outData, 0, 0);
-  return outC.toDataURL("image/png");
+  const url = outC.toDataURL("image/png");
+  cached.overlayCache.set(cacheKey, url);
+  return url;
 }
 

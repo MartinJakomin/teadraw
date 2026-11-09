@@ -87,16 +87,26 @@ export function SubmitScreen(props: {
         ) : (
           <>
             <div className="field" style={{ margin: "clamp(0.25rem, 0.6vh, 0.45rem) 0" }}>
-              <label style={{ fontSize: "0.78rem" }}>Your fake prompt</label>
+              <div className="row space" style={{ marginBottom: "2px" }}>
+                <label style={{ fontSize: "0.78rem" }}>Your fake prompt</label>
+                <span className="muted small" style={{ fontSize: "0.72rem" }}>{text.length}/80</span>
+              </div>
               <input
                 value={text}
                 onChange={(e) => {
                   setText(e.target.value);
                   setError("");
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && text.trim() && !submitting) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
                 maxLength={80}
                 placeholder="A duck learning algebra"
                 disabled={submitting}
+                autoFocus
               />
               {error && <div className="error small">{error}</div>}
             </div>

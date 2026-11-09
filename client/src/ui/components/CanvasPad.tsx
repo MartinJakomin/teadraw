@@ -1,35 +1,50 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StrokeEvent, StrokePoint } from "../../types";
 
+const SPIN_SCALE = 0.64;
+const SPIN_PERIOD_MS = 14000;
+
 function getCanvasPos(
   evt: PointerEvent,
   canvas: HTMLCanvasElement,
+  container: HTMLDivElement | null,
   isUpsideDown = false,
   isSpinning = false,
-  spinStartTime = 0
+  spinAngleRad = 0
 ): StrokePoint {
+  if (isSpinning && container) {
+    const rect = container.getBoundingClientRect();
+    const baseW = container.clientWidth || rect.width;
+    const baseH = container.clientHeight || rect.height;
+    const cxScreen = rect.left + rect.width / 2;
+    const cyScreen = rect.top + rect.height / 2;
+    const dxScreen = evt.clientX - cxScreen;
+    const dyScreen = evt.clientY - cyScreen;
+
+    // Un-rotate in isotropic screen space around the unrotated container center
+    const cos = Math.cos(-spinAngleRad);
+    const sin = Math.sin(-spinAngleRad);
+    const unrotXScreen = (dxScreen * cos - dyScreen * sin) / SPIN_SCALE;
+    const unrotYScreen = (dxScreen * sin + dyScreen * cos) / SPIN_SCALE;
+
+    let rawX = canvas.width / 2 + unrotXScreen * (canvas.width / baseW);
+    let rawY = canvas.height / 2 + unrotYScreen * (canvas.height / baseH);
+
+    rawX = Math.max(0, Math.min(canvas.width, rawX));
+    rawY = Math.max(0, Math.min(canvas.height, rawY));
+
+    return {
+      x: isUpsideDown ? canvas.width - rawX : rawX,
+      y: isUpsideDown ? canvas.height - rawY : rawY
+    };
+  }
+
   const rect = canvas.getBoundingClientRect();
   let rawX = (evt.clientX - rect.left) * (canvas.width / rect.width);
   let rawY = (evt.clientY - rect.top) * (canvas.height / rect.height);
 
   rawX = Math.max(0, Math.min(canvas.width, rawX));
   rawY = Math.max(0, Math.min(canvas.height, rawY));
-
-  if (isSpinning && spinStartTime > 0) {
-    const elapsed = (Date.now() - spinStartTime) % 14000;
-    const angle = (elapsed / 14000) * 2 * Math.PI;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const dx = rawX - cx;
-    const dy = rawY - cy;
-    // Un-rotate by -angle
-    const cos = Math.cos(-angle);
-    const sin = Math.sin(-angle);
-    rawX = cx + dx * cos - dy * sin;
-    rawY = cy + dx * sin + dy * cos;
-    rawX = Math.max(0, Math.min(canvas.width, rawX));
-    rawY = Math.max(0, Math.min(canvas.height, rawY));
-  }
 
   return {
     x: isUpsideDown ? canvas.width - rawX : rawX,
@@ -106,11 +121,18 @@ export function CanvasPad(props: {
   const isShadowFinger = props.trick === "shadow_finger";
   const isTrashCompactor = props.trick === "trash_compactor";
   const isPuzzleJumble = props.trick === "puzzle_jumble";
+  const isCubism = props.trick === "cubism";
+  const isSpiderweb = props.trick === "spiderweb";
+  const isMagnets = props.trick === "magnets";
+  const isWindTunnel = props.trick === "wind_tunnel";
+  const isPoltergeist = props.trick === "poltergeist";
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hasDrawn, setHasDrawn] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
   const [color, setColor] = useState(props.initialColor ?? "#111111");
+  const lastNonWhiteColorRef = useRef(props.initialColor && props.initialColor.toUpperCase() !== "#FFFFFF" ? props.initialColor : "#111111");
   const [size, setSize] = useState(strokeWidth);
   const activeStrokeWidth = isSizeLocked ? strokeWidth : size;
 
@@ -119,12 +141,25 @@ export function CanvasPad(props: {
   const [inkRemaining, setInkRemaining] = useState<number>(maxInk);
   const inkRemainingRef = useRef<number>(maxInk);
 
-  // Spinning canvas reference timestamp
+  // Spinning canvas reference timestamp & live angle (radians)
   const spinStartTimeRef = useRef(Date.now());
+  const spinAngleRef = useRef<number>(0);
 
-  // Trash compactor start timestamp & reactive progress (60 seconds)
+  // Trash compactor start timestamp & direct DOM refs (zero 60fps React re-renders)
   const compactorStartTimeRef = useRef(Date.now());
-  const [compactorProgress, setCompactorProgress] = useState<number>(0);
+  const compactorWarnRef = useRef<HTMLDivElement | null>(null);
+  const compactorTopRef = useRef<HTMLDivElement | null>(null);
+  const compactorBottomRef = useRef<HTMLDivElement | null>(null);
+  const compactorLeftRef = useRef<HTMLDivElement | null>(null);
+  const compactorRightRef = useRef<HTMLDivElement | null>(null);
+
+  // Undo snapshot stack (bounded to 15 steps)
+  const undoStackRef = useRef<Array<{
+    imageData: ImageData;
+    strokesLen: number;
+    inkRemaining: number;
+    hasDrawnBefore: boolean;
+  }>>([]);
 
   // Drawing state ref
   const drawingRef = useRef<boolean>(false);
@@ -185,6 +220,37 @@ export function CanvasPad(props: {
   // Ice Skater slippery physics state
   const icePosRef = useRef<StrokePoint | null>(null);
   const iceVelRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
+
+  // Poltergeist autonomous canvas ghost state & DOM ref
+  const poltergeistDomRef = useRef<HTMLDivElement | null>(null);
+  const ghostAgentRef = useRef<{
+    x: number;
+    y: number;
+    targetX: number;
+    targetY: number;
+    mode: "roam" | "draw" | "erase";
+    modeUntil: number;
+    activeStroke: StrokeEvent | null;
+    lastTick: number;
+    phase: number;
+  }>({
+    x: 450,
+    y: 275,
+    targetX: 620,
+    targetY: 190,
+    mode: "roam",
+    modeUntil: 0,
+    activeStroke: null,
+    lastTick: 0,
+    phase: 0
+  });
+
+  // Magnet Anomaly DOM refs (5 poles across the canvas)
+  const magnetDomRefs = useRef<Array<HTMLDivElement | null>>([null, null, null, null, null]);
+
+  // Wind Tunnel state & DOM ref
+  const lastWindTickRef = useRef<number>(Date.now());
+  const windBannerDomRef = useRef<HTMLDivElement | null>(null);
 
   // Delayed events queue for 2s Input Lag
   const delayedQueueRef = useRef<Array<{
@@ -252,6 +318,16 @@ export function CanvasPad(props: {
   isSnakeTailRef.current = isSnakeTail;
   const isTractorBeamRef = useRef(isTractorBeam);
   isTractorBeamRef.current = isTractorBeam;
+  const isCubismRef = useRef(isCubism);
+  isCubismRef.current = isCubism;
+  const isSpiderwebRef = useRef(isSpiderweb);
+  isSpiderwebRef.current = isSpiderweb;
+  const isMagnetsRef = useRef(isMagnets);
+  isMagnetsRef.current = isMagnets;
+  const isWindTunnelRef = useRef(isWindTunnel);
+  isWindTunnelRef.current = isWindTunnel;
+  const isPoltergeistRef = useRef(isPoltergeist);
+  isPoltergeistRef.current = isPoltergeist;
 
   const disabledRef = useRef(props.disabled);
   disabledRef.current = props.disabled;
@@ -397,6 +473,233 @@ export function CanvasPad(props: {
     ctx.restore(); // Restore tail transform
   };
 
+  // Helper to draw an 8-legged spider either perched on the web or hanging from a silk drop-thread
+  const drawSpiderCreature = (
+    ctx: CanvasRenderingContext2D,
+    anchor: StrokePoint,
+    seedIndex: number,
+    strokeColor: string
+  ) => {
+    const isHanging = seedIndex % 2 === 1;
+    const hangLen = isHanging ? 28 + ((seedIndex * 17) % 38) : 0;
+    const sx = anchor.x;
+    const sy = Math.min(542, anchor.y + hangLen);
+    const scale = 0.85 + ((seedIndex * 7) % 5) * 0.1;
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // Silk drop-thread if hanging
+    if (isHanging) {
+      ctx.strokeStyle = strokeColor;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(anchor.x, anchor.y);
+      ctx.lineTo(sx, sy);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 0.95;
+    ctx.translate(sx, sy);
+    if (!isHanging) {
+      ctx.rotate(((seedIndex * 43) % 360) * (Math.PI / 180));
+    }
+
+    // 8 jointed spider legs (4 on each side)
+    ctx.strokeStyle = "#1e293b";
+    ctx.lineWidth = 1.6 * scale;
+    const legAngles = [-0.85, -0.32, 0.28, 0.82];
+    for (const side of [-1, 1]) {
+      for (const la of legAngles) {
+        const kneeX = side * Math.cos(la) * 8.5 * scale;
+        const kneeY = Math.sin(la) * 7.5 * scale - 1.5 * scale;
+        const footX = side * Math.cos(la + 0.25) * 14.5 * scale;
+        const footY = Math.sin(la + 0.25) * 13 * scale + 2.5 * scale;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(kneeX, kneeY);
+        ctx.lineTo(footX, footY);
+        ctx.stroke();
+      }
+    }
+
+    // Spider abdomen & cephalothorax
+    ctx.fillStyle = "#0f172a";
+    ctx.beginPath();
+    ctx.arc(0, -3.2 * scale, 5.2 * scale, 0, Math.PI * 2);
+    ctx.arc(0, 3.2 * scale, 3.4 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Red hourglass mark on abdomen
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.arc(0, -3.2 * scale, 1.7 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glowing eyes
+    ctx.fillStyle = "#f8fafc";
+    ctx.beginPath();
+    ctx.arc(-1.3 * scale, 4.4 * scale, 0.95 * scale, 0, Math.PI * 2);
+    ctx.arc(1.3 * scale, 4.4 * scale, 0.95 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  };
+
+  // Helper to draw spiderweb silk threads + concentric web rungs + perched/hanging spiders
+  const drawSpiderwebThreads = (
+    ctx: CanvasRenderingContext2D,
+    pt: StrokePoint,
+    priorStrokes: StrokeEvent[],
+    currentPts: StrokePoint[],
+    strokeColor: string,
+    brushSize: number
+  ) => {
+    const totalPtIdx = currentPts.length;
+    // Weave web strands every 3rd point for rich cobwebs without turning solid black
+    if (totalPtIdx % 3 !== 0) return;
+
+    const maxDist = 148;
+    const minDist = 18;
+    const maxLinks = 6;
+    const connectedTargets: StrokePoint[] = [];
+
+    ctx.save();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = Math.max(0.9, brushSize * 0.14);
+    ctx.lineCap = "round";
+
+    // Check earlier points in current stroke
+    for (let i = currentPts.length - 5; i >= 0 && connectedTargets.length < maxLinks; i -= 4) {
+      const target = currentPts[i]!;
+      const d = Math.hypot(pt.x - target.x, pt.y - target.y);
+      if (d >= minDist && d <= maxDist) {
+        ctx.globalAlpha = (1 - d / maxDist) * 0.34;
+        ctx.beginPath();
+        ctx.moveTo(pt.x, pt.y);
+        ctx.lineTo(target.x, target.y);
+        ctx.stroke();
+        connectedTargets.push(target);
+      }
+    }
+
+    // Check points in previous strokes
+    for (let sIdx = priorStrokes.length - 1; sIdx >= 0 && connectedTargets.length < maxLinks; sIdx--) {
+      const sPts = priorStrokes[sIdx]!.points;
+      for (let i = sPts.length - 1; i >= 0 && connectedTargets.length < maxLinks; i -= 5) {
+        const target = sPts[i]!;
+        const d = Math.hypot(pt.x - target.x, pt.y - target.y);
+        if (d >= minDist && d <= maxDist) {
+          ctx.globalAlpha = (1 - d / maxDist) * 0.3;
+          ctx.beginPath();
+          ctx.moveTo(pt.x, pt.y);
+          ctx.lineTo(target.x, target.y);
+          ctx.stroke();
+          connectedTargets.push(target);
+        }
+      }
+    }
+
+    // Weave concentric cross-silk rungs between connected radial strands
+    if (connectedTargets.length >= 2) {
+      ctx.lineWidth = Math.max(0.8, brushSize * 0.11);
+      for (let k = 0; k < Math.min(connectedTargets.length - 1, 3); k++) {
+        const t1 = connectedTargets[k]!;
+        const t2 = connectedTargets[k + 1]!;
+        for (const ratio of [0.38, 0.72]) {
+          const r1x = pt.x + (t1.x - pt.x) * ratio;
+          const r1y = pt.y + (t1.y - pt.y) * ratio;
+          const r2x = pt.x + (t2.x - pt.x) * ratio;
+          const r2y = pt.y + (t2.y - pt.y) * ratio;
+          if (Math.hypot(r1x - r2x, r1y - r2y) < 105) {
+            ctx.globalAlpha = 0.24;
+            ctx.beginPath();
+            ctx.moveTo(r1x, r1y);
+            ctx.lineTo(r2x, r2y);
+            ctx.stroke();
+          }
+        }
+      }
+    }
+
+    ctx.restore();
+
+    // Deterministically place perched or hanging spiders along the web every 14 points
+    if (totalPtIdx > 0 && totalPtIdx % 14 === 0 && connectedTargets.length >= 1) {
+      const spiderSeed = Math.floor(totalPtIdx / 14) + priorStrokes.length * 7;
+      drawSpiderCreature(ctx, pt, spiderSeed, strokeColor);
+    }
+  };
+
+  // Helper for Polygon Cubism: bridges straight lines (and curves) to previously drawn strokes or creates an angular Cubist shard
+  const buildCubismPolygonPoints = (
+    rawPts: StrokePoint[],
+    priorStrokes: StrokeEvent[],
+    canvasWidth: number,
+    canvasHeight: number
+  ): StrokePoint[] => {
+    if (rawPts.length < 2) return rawPts;
+    const pts = [...rawPts];
+    const start = pts[0]!;
+    const end = pts[pts.length - 1]!;
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const chordLen = Math.hypot(dx, dy);
+
+    // Measure how "straight" or flat the stroke is (max perpendicular distance from start->end line)
+    let maxPerp = 0;
+    const ux = chordLen > 1 ? dx / chordLen : 1;
+    const uy = chordLen > 1 ? dy / chordLen : 0;
+    const nx = -uy;
+    const ny = ux;
+    for (const p of pts) {
+      const perp = Math.abs((p.x - start.x) * nx + (p.y - start.y) * ny);
+      if (perp > maxPerp) maxPerp = perp;
+    }
+
+    const isStraightish = maxPerp < Math.max(24, chordLen * 0.22);
+
+    // 1. Try to connect to a vertex on something already drawn so strokes fuse into a connected Cubist mesh!
+    let bestAnchor: StrokePoint | null = null;
+    let bestScore = -1;
+    for (let sIdx = priorStrokes.length - 1; sIdx >= 0; sIdx--) {
+      const sPts = priorStrokes[sIdx]!.points;
+      const step = Math.max(1, Math.floor(sPts.length / 8));
+      for (let i = 0; i < sPts.length; i += step) {
+        const cand = sPts[i]!;
+        const distMid = Math.hypot(cand.x - midX, cand.y - midY);
+        if (distMid < 22 || distMid > 310) continue;
+        const perpDist = Math.abs((cand.x - start.x) * nx + (cand.y - start.y) * ny);
+        if (perpDist < 20) continue; // Avoid collinear points that would still look like a flat line
+        // Prefer nearby points that give a nice wide triangle facet
+        const score = perpDist - distMid * 0.35;
+        if (score > bestScore) {
+          bestScore = score;
+          bestAnchor = cand;
+        }
+      }
+    }
+
+    if (bestAnchor && (isStraightish || bestScore > 12)) {
+      pts.push({ x: bestAnchor.x, y: bestAnchor.y });
+    } else if (isStraightish) {
+      // 2. Fallback when nothing else is drawn yet (or nearby): project a geometric Cubist prism vertex perpendicular to the line
+      const shardHeight = Math.max(38, Math.min(115, chordLen * 0.38));
+      const sign = ((Math.round(start.x + end.y) % 2) === 0) ? 1 : -1;
+      const vx = Math.max(8, Math.min(canvasWidth - 8, midX + nx * shardHeight * sign));
+      const vy = Math.max(8, Math.min(canvasHeight - 8, midY + ny * shardHeight * sign));
+      pts.push({ x: vx, y: vy });
+    }
+
+    // Close polygon loop back to start
+    pts.push({ x: start.x, y: start.y });
+    return pts;
+  };
+
   // Helper to cleanly redraw all recorded strokes for full permanent export
   const redrawAllStrokes = (
     targetCtx: CanvasRenderingContext2D,
@@ -406,18 +709,20 @@ export function CanvasPad(props: {
   ) => {
     targetCtx.fillStyle = "#fff";
     targetCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+    const drawnSoFar: StrokeEvent[] = [];
     for (const s of allStrokes) {
       if (s.points.length < 1) continue;
+      const colorStr = `rgb(${s.color.r},${s.color.g},${s.color.b})`;
       targetCtx.lineCap = "round";
       targetCtx.lineJoin = "round";
-      targetCtx.strokeStyle = `rgb(${s.color.r},${s.color.g},${s.color.b})`;
+      targetCtx.strokeStyle = colorStr;
       targetCtx.lineWidth = s.brushSize;
       targetCtx.globalAlpha = s.opacity ?? 1;
 
       if (s.points.length === 1) {
         targetCtx.beginPath();
         targetCtx.arc(s.points[0]!.x, s.points[0]!.y, s.brushSize / 2, 0, Math.PI * 2);
-        targetCtx.fillStyle = `rgb(${s.color.r},${s.color.g},${s.color.b})`;
+        targetCtx.fillStyle = colorStr;
         targetCtx.fill();
       } else {
         targetCtx.beginPath();
@@ -425,8 +730,25 @@ export function CanvasPad(props: {
         for (let i = 1; i < s.points.length; i++) {
           targetCtx.lineTo(s.points[i]!.x, s.points[i]!.y);
         }
+        if (isCubismRef.current && s.points.length >= 3) {
+          targetCtx.closePath();
+          targetCtx.save();
+          targetCtx.fillStyle = colorStr;
+          targetCtx.globalAlpha = 0.28;
+          targetCtx.fill();
+          targetCtx.restore();
+        }
         targetCtx.stroke();
+
+        if (isSpiderwebRef.current) {
+          const accPts: StrokePoint[] = [];
+          for (const pt of s.points) {
+            accPts.push(pt);
+            drawSpiderwebThreads(targetCtx, pt, drawnSoFar, accPts, colorStr, s.brushSize);
+          }
+        }
       }
+      drawnSoFar.push(s);
     }
     targetCtx.globalAlpha = 1;
 
@@ -485,6 +807,32 @@ export function CanvasPad(props: {
       // If user was mid-drawing when submit fired, flush unfinished points into strokes
       if (currentPointsRef.current.length > 0) {
         const effectiveStrokeSize = isRandomBrushRef.current ? currentDynamicSizeRef.current : activeStrokeWidthRef.current;
+        if (isCubismRef.current && currentPointsRef.current.length >= 2) {
+          currentPointsRef.current = buildCubismPolygonPoints(
+            currentPointsRef.current,
+            strokesRef.current,
+            canvas.width,
+            canvas.height
+          );
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(currentPointsRef.current[0]!.x, currentPointsRef.current[0]!.y);
+            for (let i = 1; i < currentPointsRef.current.length; i++) {
+              ctx.lineTo(currentPointsRef.current[i]!.x, currentPointsRef.current[i]!.y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = colorRef.current;
+            ctx.globalAlpha = 0.28;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = colorRef.current;
+            ctx.lineWidth = effectiveStrokeSize;
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
         const newStroke: StrokeEvent = {
           id: Math.random().toString(36).substr(2, 9),
           playerId: playerIdRef.current,
@@ -804,6 +1152,8 @@ export function CanvasPad(props: {
     if (!ctx) return;
 
     strokesRef.current = [];
+    undoStackRef.current = [];
+    setCanUndo(false);
     hasSubmittedRef.current = false;
 
     if (props.initialDataUrl) {
@@ -984,10 +1334,10 @@ export function CanvasPad(props: {
     const pullDist = Math.hypot(dx, dy);
 
     // Calculate opposite firing vector with ballistic gravity drop
-    const flingPower = Math.min(320, pullDist * 2.2);
+    const flingPower = Math.min(1050, pullDist * 2.5);
     const angle = Math.atan2(-dy, -dx);
-    const targetX = Math.max(10, Math.min(canvas.width - 10, anchor.x + Math.cos(angle) * flingPower));
-    const targetY = Math.max(10, Math.min(canvas.height - 10, anchor.y + Math.sin(angle) * flingPower));
+    const targetX = Math.max(0, Math.min(canvas.width, anchor.x + Math.cos(angle) * flingPower));
+    const targetY = Math.max(0, Math.min(canvas.height, anchor.y + Math.sin(angle) * flingPower));
 
     const tx = (targetX / canvas.width) * rect.width;
     const ty = (targetY / canvas.height) * rect.height;
@@ -1044,23 +1394,316 @@ export function CanvasPad(props: {
     shadowOverlayRef.current.style.background = `radial-gradient(circle 165px at ${fx}px ${fy}px, #000000 0%, #000000 135px, rgba(0,0,0,0.85) 150px, rgba(0,0,0,0) 165px)`;
   };
 
-  // Real-time animation loop for 2s Input Delay + Vanishing Ink, Helium Drift & Trash Compactor
+  // Helper to update Trash Compactor DOM walls directly without triggering React state re-renders
+  const updateCompactorDOM = (progress: number) => {
+    if (compactorWarnRef.current) {
+      compactorWarnRef.current.style.display = progress === 0 ? "block" : "none";
+    }
+    const pct = `${Math.min(48.5, progress * 48.5)}%`;
+    const activeBorder = progress > 0;
+    if (compactorTopRef.current) {
+      compactorTopRef.current.style.height = pct;
+      compactorTopRef.current.style.borderBottom = activeBorder ? "3px solid #ef4444" : "none";
+      compactorTopRef.current.style.boxShadow = activeBorder ? "0 2px 4px rgba(0,0,0,0.35)" : "none";
+    }
+    if (compactorBottomRef.current) {
+      compactorBottomRef.current.style.height = pct;
+      compactorBottomRef.current.style.borderTop = activeBorder ? "3px solid #ef4444" : "none";
+      compactorBottomRef.current.style.boxShadow = activeBorder ? "0 -2px 4px rgba(0,0,0,0.35)" : "none";
+    }
+    if (compactorLeftRef.current) {
+      compactorLeftRef.current.style.top = pct;
+      compactorLeftRef.current.style.bottom = pct;
+      compactorLeftRef.current.style.width = pct;
+      compactorLeftRef.current.style.borderRight = activeBorder ? "3px solid #ef4444" : "none";
+      compactorLeftRef.current.style.boxShadow = activeBorder ? "2px 0 4px rgba(0,0,0,0.35)" : "none";
+    }
+    if (compactorRightRef.current) {
+      compactorRightRef.current.style.top = pct;
+      compactorRightRef.current.style.bottom = pct;
+      compactorRightRef.current.style.width = pct;
+      compactorRightRef.current.style.borderLeft = activeBorder ? "3px solid #ef4444" : "none";
+      compactorRightRef.current.style.boxShadow = activeBorder ? "-2px 0 4px rgba(0,0,0,0.35)" : "none";
+    }
+  };
+
+  // Real-time animation loop (only runs when an animated trick is active)
   useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!isSpinning && canvas) {
+      spinAngleRef.current = 0;
+      canvas.style.transform = "";
+    }
+
+    const needsLoop = isSpinning || isTrashCompactor || isTractorBeam || isInputDelay || isMagnets || isWindTunnel || isPoltergeist;
+    if (!needsLoop) return;
+
     let animId: number;
 
     const renderLoop = () => {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext("2d");
+      const c = canvasRef.current;
+      const ctx = c?.getContext("2d");
+
+      // Spinning Canvas: Drive rotation & scale directly in JS so pointer un-rotation is 100% synchronized
+      if (isSpinningRef.current && c) {
+        const elapsed = (Date.now() - spinStartTimeRef.current) % SPIN_PERIOD_MS;
+        const angle = (elapsed / SPIN_PERIOD_MS) * 2 * Math.PI;
+        spinAngleRef.current = angle;
+        const deg = (angle * 180) / Math.PI;
+        c.style.transform = `rotate(${deg.toFixed(2)}deg) scale(${SPIN_SCALE})`;
+      }
+
+      // Magnet Anomaly: Update all 5 high-power magnetic pole indicators directly in DOM every frame (10s polarity cycle)
+      if (isMagnetsRef.current && !hasSubmittedRef.current) {
+        const now = Date.now();
+        const flip = Math.floor(now / 10000) % 2 === 0;
+        const remSec = Math.ceil((10000 - (now % 10000)) / 1000);
+        for (let idx = 0; idx < 5; idx++) {
+          const el = magnetDomRefs.current[idx];
+          if (!el) continue;
+          const attract = idx % 2 === 0 ? flip : !flip;
+          const pulse = 1 + Math.sin(now / 160 + idx * 1.1) * 0.1;
+          el.style.transform = `translate(-50%, -50%) scale(${pulse.toFixed(3)})`;
+          el.style.borderColor = attract ? "rgba(244, 63, 94, 0.92)" : "rgba(56, 189, 248, 0.92)";
+          el.style.background = attract ? "rgba(225, 29, 72, 0.85)" : "rgba(2, 132, 199, 0.85)";
+          el.style.boxShadow = attract
+            ? "0 0 26px rgba(244, 63, 94, 0.75)"
+            : "0 0 26px rgba(56, 189, 248, 0.75)";
+          el.textContent = attract
+            ? idx === 2
+              ? `🧲 CORE PULL (${remSec}s)`
+              : "🧲 ATTRACT"
+            : idx === 2
+              ? `🧲 CORE PUSH (${remSec}s)`
+              : "🧲 REPEL";
+        }
+      }
+
+      // Poltergeist Ghost: A mischievous floating 👻 emoji roaming all over the canvas, drawing and erasing segments
+      if (isPoltergeistRef.current && !hasSubmittedRef.current && !disabledRef.current && c && ctx) {
+        const now = Date.now();
+        const g = ghostAgentRef.current;
+
+        if (now - g.lastTick >= 30) {
+          g.lastTick = now;
+          g.phase += 0.22;
+
+          // Helper to pick a random point on a player-drawn stroke
+          const pickPlayerStrokePoint = (): StrokePoint | null => {
+            const playerStrokes = strokesRef.current.filter(
+              (st) => !st.id.startsWith("ghost-") && st.points.length >= 3
+            );
+            if (playerStrokes.length > 0) {
+              const st = playerStrokes[Math.floor(Math.random() * playerStrokes.length)]!;
+              const pt = st.points[Math.floor(Math.random() * st.points.length)];
+              if (pt) return { x: pt.x, y: pt.y };
+            }
+            if (currentPointsRef.current.length > 8) {
+              const idx = Math.floor(Math.random() * (currentPointsRef.current.length - 4));
+              const pt = currentPointsRef.current[idx];
+              if (pt) return { x: pt.x, y: pt.y };
+            }
+            return null;
+          };
+
+          // Switch ghost mode when timer expires: mostly draws and roams, erases at 30%
+          if (now >= g.modeUntil) {
+            const targetPlayerPt = pickPlayerStrokePoint();
+            // Erase at 30% chance when player strokes exist
+            if (targetPlayerPt && Math.random() < 0.30) {
+              g.mode = "erase";
+              g.modeUntil = now + 500 + Math.random() * 350;
+              g.activeStroke = null;
+              g.targetX = targetPlayerPt.x;
+              g.targetY = targetPlayerPt.y;
+            } else if (Math.random() < 0.70) {
+              // Draw frequently (70% chance) with longer doodle strokes!
+              g.mode = "draw";
+              g.modeUntil = now + 1200 + Math.random() * 800;
+              g.targetX = 25 + Math.random() * (c.width - 50);
+              g.targetY = 25 + Math.random() * (c.height - 50);
+              const newGhostStroke: StrokeEvent = {
+                id: `ghost-${Math.random().toString(36).slice(2, 9)}`,
+                playerId: playerIdRef.current,
+                points: [{ x: g.x, y: g.y }],
+                brushSize: Math.max(3.5, activeStrokeWidthRef.current * 0.75),
+                color: hexToRgb(colorRef.current),
+                opacity: 0.85,
+                timestamp: now
+              };
+              strokesRef.current.push(newGhostStroke);
+              g.activeStroke = newGhostStroke;
+            } else {
+              // Roam briefly
+              g.mode = "roam";
+              g.modeUntil = now + 800 + Math.random() * 600;
+              g.activeStroke = null;
+              g.targetX = 20 + Math.random() * (c.width - 40);
+              g.targetY = 20 + Math.random() * (c.height - 40);
+            }
+          }
+
+          // Steer ghost toward current target
+          const dx = g.targetX - g.x;
+          const dy = g.targetY - g.y;
+          const dist = Math.hypot(dx, dy);
+
+          if (dist < 28) {
+            g.targetX = 20 + Math.random() * (c.width - 40);
+            g.targetY = 20 + Math.random() * (c.height - 40);
+          }
+
+          const speed = g.mode === "erase" ? 5.8 : g.mode === "draw" ? 5.2 : 4.0;
+          const dirAngle = Math.atan2(dy, dx);
+          // Playful flowing wobble
+          const wobbleAngle = dirAngle + Math.sin(g.phase) * 0.55;
+          const prevX = g.x;
+          const prevY = g.y;
+          g.x = Math.max(16, Math.min(c.width - 16, g.x + Math.cos(wobbleAngle) * speed));
+          g.y = Math.max(16, Math.min(c.height - 16, g.y + Math.sin(wobbleAngle) * speed));
+
+          if (g.mode === "draw" && g.activeStroke) {
+            g.activeStroke.points.push({ x: g.x, y: g.y });
+            if (!isBlind) {
+              ctx.save();
+              ctx.lineCap = "round";
+              ctx.lineJoin = "round";
+              ctx.strokeStyle = `rgb(${g.activeStroke.color.r},${g.activeStroke.color.g},${g.activeStroke.color.b})`;
+              ctx.lineWidth = g.activeStroke.brushSize;
+              ctx.globalAlpha = 0.85;
+              ctx.beginPath();
+              ctx.moveTo(prevX, prevY);
+              ctx.lineTo(g.x, g.y);
+              ctx.stroke();
+              ctx.restore();
+            }
+            setHasDrawn(true);
+            onChangeRef.current?.();
+          } else if (g.mode === "erase") {
+            // Smaller erase radius (20px) so it only pinches tiny segments without wiping out whole drawings
+            const eraseRadius = 20;
+            let erasedAny = false;
+            const nextStrokes: StrokeEvent[] = [];
+
+            for (const st of strokesRef.current) {
+              if (st.id.startsWith("ghost-")) {
+                nextStrokes.push(st);
+                continue;
+              }
+              let currentChunk: StrokePoint[] = [];
+              let strokeModified = false;
+              for (const pt of st.points) {
+                if (Math.hypot(pt.x - g.x, pt.y - g.y) <= eraseRadius) {
+                  strokeModified = true;
+                  erasedAny = true;
+                  if (currentChunk.length >= 2) {
+                    nextStrokes.push({
+                      ...st,
+                      id: Math.random().toString(36).slice(2, 9),
+                      points: currentChunk
+                    });
+                  }
+                  currentChunk = [];
+                } else {
+                  currentChunk.push(pt);
+                }
+              }
+              if (!strokeModified) {
+                nextStrokes.push(st);
+              } else if (currentChunk.length >= 2) {
+                nextStrokes.push({
+                  ...st,
+                  id: Math.random().toString(36).slice(2, 9),
+                  points: currentChunk
+                });
+              }
+            }
+
+            // Also erase earlier points of player's in-progress stroke if passing nearby
+            if (currentPointsRef.current.length > 8) {
+              const safeTail = currentPointsRef.current.slice(-4);
+              const checkHead = currentPointsRef.current.slice(0, -4);
+              const keptHead = checkHead.filter((pt) => {
+                const hit = Math.hypot(pt.x - g.x, pt.y - g.y) <= eraseRadius;
+                if (hit) erasedAny = true;
+                return !hit;
+              });
+              if (keptHead.length !== checkHead.length) {
+                currentPointsRef.current = [...keptHead, ...safeTail];
+              }
+            }
+
+            if (erasedAny) {
+              strokesRef.current = nextStrokes;
+              if (!isBlind) {
+                redrawAllStrokes(ctx, c, strokesRef.current, currentPointsRef.current);
+              }
+              onChangeRef.current?.();
+              // After nipping a tiny segment, immediately switch back to drawing or roaming
+              g.mode = "draw";
+              g.modeUntil = now + 1000 + Math.random() * 600;
+              g.targetX = 25 + Math.random() * (c.width - 50);
+              g.targetY = 25 + Math.random() * (c.height - 50);
+            }
+          }
+
+          // Update floating Ghost emoji avatar on canvas
+          if (poltergeistDomRef.current) {
+            const el = poltergeistDomRef.current;
+            const floatBob = Math.sin(g.phase * 1.4) * 6;
+            const tilt = Math.cos(g.phase * 0.9) * 12;
+            const flip = Math.cos(dirAngle) < 0 ? -1 : 1;
+            el.style.left = `${(g.x / c.width) * 100}%`;
+            el.style.top = `${((g.y + floatBob) / c.height) * 100}%`;
+            el.style.transform = `translate(-50%, -50%) scaleX(${flip}) rotate(${tilt}deg) scale(${g.mode === "erase" ? 1.25 : 1})`;
+            el.style.filter = g.mode === "erase"
+              ? "drop-shadow(0 0 16px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 6px #f43f5e)"
+              : g.mode === "draw"
+                ? "drop-shadow(0 0 16px rgba(168, 85, 247, 0.9)) drop-shadow(0 0 6px #c084fc)"
+                : "drop-shadow(0 0 14px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 4px #e0e7ff)";
+          }
+        }
+      }
+
+      // Wind Tunnel: Brisk winds that alternate direction for every stroke!
+      if (isWindTunnelRef.current && !hasSubmittedRef.current && c && ctx) {
+        const now = Date.now();
+        const activeStrokeDir = strokesRef.current.length % 2 === 0 ? 1 : -1;
+        if (windBannerDomRef.current) {
+          const arrow = activeStrokeDir > 0 ? "💨 ➡️ RIGHT" : "⬅️ 💨 LEFT";
+          windBannerDomRef.current.textContent = `🌬️ Wind Tunnel (${arrow}): Direction flips every stroke!`;
+        }
+        if (now - lastWindTickRef.current >= 38) {
+          lastWindTickRef.current = now;
+          let drifted = false;
+          for (let sIdx = 0; sIdx < strokesRef.current.length; sIdx++) {
+            const s = strokesRef.current[sIdx]!;
+            if (now - s.timestamp < 3600) {
+              const dir = sIdx % 2 === 0 ? 1 : -1;
+              const dx = dir * 1.45;
+              const dy = dir * 0.22;
+              for (const pt of s.points) {
+                pt.x = Math.max(0, Math.min(c.width, pt.x + dx));
+                pt.y = Math.max(0, Math.min(c.height, pt.y + dy));
+              }
+              drifted = true;
+            }
+          }
+          if (drifted && !isBlind) {
+            redrawAllStrokes(ctx, c, strokesRef.current, currentPointsRef.current);
+          }
+        }
+      }
 
       // Trash Compactor: 5-second delay before starting, then smooth 60s shrink of available drawing boundary
-      if (isTrashCompactorRef.current && !hasSubmittedRef.current && canvas && ctx) {
+      if (isTrashCompactorRef.current && !hasSubmittedRef.current && c && ctx) {
         const elapsed = Date.now() - compactorStartTimeRef.current;
         const progress = elapsed < 5000 ? 0 : Math.min(1, (elapsed - 5000) / 60000);
-        setCompactorProgress(progress);
+        updateCompactorDOM(progress);
       }
 
       // Alien Vaporizer Beam: Charges up every few seconds and completely removes all ink/area in the beam
-      if (isTractorBeamRef.current && !hasSubmittedRef.current && canvas) {
+      if (isTractorBeamRef.current && !hasSubmittedRef.current && c) {
         const t = Date.now();
         const cycle = t % 4200; // 4.2s cycle
         const isCharging = cycle >= 2200 && cycle < 3200;
@@ -1068,7 +1711,7 @@ export function CanvasPad(props: {
 
         if (!isCharging && !isFiring) {
           // Patrol movement
-          const ufoX = canvas.width / 2 + Math.sin(t / 1100) * (canvas.width * 0.38);
+          const ufoX = c.width / 2 + Math.sin(t / 1100) * (c.width * 0.38);
           ufoPosRef.current = { x: ufoX, y: 36 };
         }
 
@@ -1077,14 +1720,14 @@ export function CanvasPad(props: {
 
         if (ufoDomRef.current && tractorBeamDomRef.current && containerRef.current) {
           const rect = containerRef.current.getBoundingClientRect();
-          const screenX = (ufoX / canvas.width) * rect.width;
-          const screenY = (ufoY / canvas.height) * rect.height;
+          const screenX = (ufoX / c.width) * rect.width;
+          const screenY = (ufoY / c.height) * rect.height;
 
           ufoDomRef.current.style.transform = `translate(${screenX - 32}px, ${screenY - 24}px)`;
 
           if (isFiring) {
             // Intense vertical disintegrator laser column
-            const beamW = (130 / canvas.width) * rect.width;
+            const beamW = (130 / c.width) * rect.width;
             tractorBeamDomRef.current.style.transform = `translate(${screenX - beamW / 2}px, ${screenY + 12}px)`;
             tractorBeamDomRef.current.style.width = `${beamW}px`;
             tractorBeamDomRef.current.style.height = `${rect.height - screenY - 12}px`;
@@ -1095,7 +1738,7 @@ export function CanvasPad(props: {
             ufoDomRef.current.style.filter = "drop-shadow(0 0 25px #38bdf8)";
           } else if (isCharging) {
             // Flashing warning beam
-            const beamHalf = (80 / canvas.width) * rect.width;
+            const beamHalf = (80 / c.width) * rect.width;
             tractorBeamDomRef.current.style.transform = `translate(${screenX - beamHalf}px, ${screenY + 12}px)`;
             tractorBeamDomRef.current.style.width = `${beamHalf * 2}px`;
             tractorBeamDomRef.current.style.height = `${rect.height - screenY - 12}px`;
@@ -1109,7 +1752,7 @@ export function CanvasPad(props: {
             ufoDomRef.current.style.filter = "drop-shadow(0 0 20px #ef4444)";
           } else {
             // Calm scanning cone
-            const beamHalf = (90 / canvas.width) * rect.width;
+            const beamHalf = (90 / c.width) * rect.width;
             tractorBeamDomRef.current.style.transform = `translate(${screenX - beamHalf}px, ${screenY + 12}px)`;
             tractorBeamDomRef.current.style.width = `${beamHalf * 2}px`;
             tractorBeamDomRef.current.style.height = `${rect.height - screenY - 12}px`;
@@ -1160,18 +1803,18 @@ export function CanvasPad(props: {
 
           if (modified) {
             strokesRef.current = nextStrokes;
-            redrawAllStrokes(ctx, canvas, strokesRef.current);
+            redrawAllStrokes(ctx, c, strokesRef.current);
           }
 
           // Visual clear of the vaporized beam column on canvas
           ctx.save();
           ctx.fillStyle = "#ffffff";
-          ctx.fillRect(beamLeft, 0, beamRight - beamLeft, canvas.height);
+          ctx.fillRect(beamLeft, 0, beamRight - beamLeft, c.height);
           ctx.restore();
         }
       }
 
-      if (isInputDelayRef.current && canvas && ctx && !hasSubmittedRef.current) {
+      if (isInputDelayRef.current && c && ctx && !hasSubmittedRef.current) {
         const now = Date.now();
         const queue = delayedQueueRef.current;
 
@@ -1219,7 +1862,7 @@ export function CanvasPad(props: {
 
         // Render visible vanishing segments to canvas
         ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, c.width, c.height);
 
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
@@ -1246,7 +1889,7 @@ export function CanvasPad(props: {
 
     animId = requestAnimationFrame(renderLoop);
     return () => cancelAnimationFrame(animId);
-  }, []);
+  }, [isSpinning, isTrashCompactor, isTractorBeam, isInputDelay, isMagnets, isWindTunnel, isPoltergeist]);
 
   // Main Pointer Down / Move / Up Handling
   useEffect(() => {
@@ -1260,6 +1903,43 @@ export function CanvasPad(props: {
 
     const onDown = (evt: PointerEvent) => {
       if (disabledRef.current || (isOneStrokeRef.current && hasSubmittedRef.current)) return;
+
+      let p = getCanvasPos(
+        evt,
+        canvas,
+        containerRef.current,
+        isUpsideDownRef.current,
+        isSpinningRef.current,
+        spinAngleRef.current
+      );
+
+      // Trash Compactor: block drawing outside the active open area
+      if (isTrashCompactorRef.current) {
+        const elapsed = Date.now() - compactorStartTimeRef.current;
+        const prog = elapsed < 5000 ? 0 : Math.min(1, (elapsed - 5000) / 60000);
+        const bounds = getCompactorBounds(canvas.width, canvas.height, prog);
+        if (p.x < bounds.minX || p.x > bounds.maxX || p.y < bounds.minY || p.y > bounds.maxY) {
+          return;
+        }
+      }
+
+      // Save undo snapshot before starting stroke (except for tricks where undo doesn't apply)
+      if (!isOneStrokeRef.current && !isInputDelayRef.current && !isTractorBeamRef.current) {
+        try {
+          const snap = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          undoStackRef.current.push({
+            imageData: snap,
+            strokesLen: strokesRef.current.length,
+            inkRemaining: inkRemainingRef.current,
+            hasDrawnBefore: strokesRef.current.length > 0
+          });
+          if (undoStackRef.current.length > 15) {
+            undoStackRef.current.shift();
+          }
+          setCanUndo(true);
+        } catch {}
+      }
+
       drawing = true;
       drawingRef.current = true;
       strokeMovedRef.current = false;
@@ -1272,24 +1952,6 @@ export function CanvasPad(props: {
       }
       if (isShadowFingerRef.current) {
         updateShadowDOM(evt.clientX, evt.clientY);
-      }
-
-      let p = getCanvasPos(
-        evt,
-        canvas,
-        isUpsideDownRef.current,
-        isSpinningRef.current,
-        spinStartTimeRef.current
-      );
-
-      // Trash Compactor: block drawing outside the active open area
-      if (isTrashCompactorRef.current) {
-        const elapsed = Date.now() - compactorStartTimeRef.current;
-        const prog = elapsed < 5000 ? 0 : Math.min(1, (elapsed - 5000) / 60000);
-        const bounds = getCompactorBounds(canvas.width, canvas.height, prog);
-        if (p.x < bounds.minX || p.x > bounds.maxX || p.y < bounds.minY || p.y > bounds.maxY) {
-          return;
-        }
       }
 
       if (isIceSkaterRef.current) {
@@ -1376,9 +2038,10 @@ export function CanvasPad(props: {
       const rawPos = getCanvasPos(
         evt,
         canvas,
+        containerRef.current,
         isUpsideDownRef.current,
         isSpinningRef.current,
-        spinStartTimeRef.current
+        spinAngleRef.current
       );
       let p = rawPos;
 
@@ -1414,15 +2077,56 @@ export function CanvasPad(props: {
         const ay = (p.y - currentIce.y) * 0.18;
         iceVelRef.current.vx = (iceVelRef.current.vx + ax) * 0.94;
         iceVelRef.current.vy = (iceVelRef.current.vy + ay) * 0.94;
+        const rawIceX = currentIce.x + iceVelRef.current.vx;
+        const rawIceY = currentIce.y + iceVelRef.current.vy;
+        if (rawIceX <= 0 || rawIceX >= canvas.width) iceVelRef.current.vx = 0;
+        if (rawIceY <= 0 || rawIceY >= canvas.height) iceVelRef.current.vy = 0;
         const newIce = {
-          x: Math.max(0, Math.min(canvas.width, currentIce.x + iceVelRef.current.vx)),
-          y: Math.max(0, Math.min(canvas.height, currentIce.y + iceVelRef.current.vy))
+          x: Math.max(0, Math.min(canvas.width, rawIceX)),
+          y: Math.max(0, Math.min(canvas.height, rawIceY))
         };
         p = newIce;
         icePosRef.current = newIce;
       }
 
-      // Glitch Teleport (Controlled, less frequent, clean gap jumps)
+      // Magnet Anomaly: 5 balanced alternating magnetic poles (switching every 10s) gently bend the brush path without locking the cursor
+      if (isMagnetsRef.current) {
+        const now = Date.now();
+        const flip = Math.floor(now / 10000) % 2 === 0;
+        const poleCoords = [
+          { rx: 0.24, ry: 0.26, radius: 210, power: 42 },
+          { rx: 0.76, ry: 0.26, radius: 210, power: 42 },
+          { rx: 0.50, ry: 0.50, radius: 230, power: 52 },
+          { rx: 0.24, ry: 0.74, radius: 210, power: 42 },
+          { rx: 0.76, ry: 0.74, radius: 210, power: 42 }
+        ];
+        let mx = 0;
+        let my = 0;
+        for (let idx = 0; idx < poleCoords.length; idx++) {
+          const pc = poleCoords[idx]!;
+          const px = canvas.width * pc.rx;
+          const py = canvas.height * pc.ry;
+          const attract = idx % 2 === 0 ? flip : !flip;
+          const dx = px - p.x;
+          const dy = py - p.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 2 && dist < pc.radius) {
+            const strength = Math.pow(1 - dist / pc.radius, 1.25) * pc.power;
+            const sign = attract ? 1 : -1;
+            mx += (dx / dist) * strength * sign;
+            my += (dy / dist) * strength * sign;
+          }
+        }
+        // Attenuate magnetic pull right at the outer 22px rim so all 4 edges (0..width, 0..height) remain 100% reachable
+        const borderDist = Math.min(p.x, canvas.width - p.x, p.y, canvas.height - p.y);
+        const borderFactor = Math.min(1, Math.max(0, borderDist / 22));
+        p = {
+          x: Math.max(0, Math.min(canvas.width, p.x + mx * borderFactor)),
+          y: Math.max(0, Math.min(canvas.height, p.y + my * borderFactor))
+        };
+      }
+
+      // Glitch Teleport (Controlled, less frequent, clean gap jumps with decaying offset so edges are never blocked)
       if (isGlitchRef.current) {
         pointsSinceGlitchRef.current = (pointsSinceGlitchRef.current || 0) + 1;
         if (pointsSinceGlitchRef.current >= 26 || (pointsSinceGlitchRef.current >= 16 && Math.random() < 0.05)) {
@@ -1433,8 +2137,8 @@ export function CanvasPad(props: {
           const jumpDistY = Math.sin(jumpAngle) * jumpDist;
           teleportOffsetRef.current = { x: jumpDistX, y: jumpDistY };
 
-          const teleportX = Math.max(10, Math.min(canvas.width - 10, rawPos.x + jumpDistX));
-          const teleportY = Math.max(10, Math.min(canvas.height - 10, rawPos.y + jumpDistY));
+          const teleportX = Math.max(0, Math.min(canvas.width, rawPos.x + jumpDistX));
+          const teleportY = Math.max(0, Math.min(canvas.height, rawPos.y + jumpDistY));
 
           p = { x: teleportX, y: teleportY };
           strokeStartRef.current = p;
@@ -1444,7 +2148,11 @@ export function CanvasPad(props: {
         }
       }
 
-      if (isGlitchRef.current && teleportOffsetRef.current.x !== 0) {
+      if (isGlitchRef.current && (teleportOffsetRef.current.x !== 0 || teleportOffsetRef.current.y !== 0)) {
+        teleportOffsetRef.current = {
+          x: Math.abs(teleportOffsetRef.current.x) < 1 ? 0 : teleportOffsetRef.current.x * 0.72,
+          y: Math.abs(teleportOffsetRef.current.y) < 1 ? 0 : teleportOffsetRef.current.y * 0.72
+        };
         p = {
           x: Math.max(0, Math.min(canvas.width, rawPos.x + teleportOffsetRef.current.x)),
           y: Math.max(0, Math.min(canvas.height, rawPos.y + teleportOffsetRef.current.y))
@@ -1452,6 +2160,12 @@ export function CanvasPad(props: {
       }
 
       const prev = currentPointsRef.current[currentPointsRef.current.length - 1] ?? strokeStartRef.current ?? p;
+      const segDist = Math.hypot(p.x - prev.x, p.y - prev.y);
+
+      // Decimate sub-pixel/micro pointer jitter to keep stroke logs compact & smooth
+      if (segDist < 1.5 && currentPointsRef.current.length > 1) {
+        return;
+      }
 
       // Ink limit budget calculation
       if (maxInk > 0 && inkRemainingRef.current <= 0) {
@@ -1459,7 +2173,6 @@ export function CanvasPad(props: {
       }
 
       if (maxInk > 0 && prev) {
-        const segDist = Math.hypot(p.x - prev.x, p.y - prev.y);
         const newRemaining = Math.max(0, inkRemainingRef.current - segDist);
         inkRemainingRef.current = newRemaining;
         setInkRemaining(newRemaining);
@@ -1506,7 +2219,6 @@ export function CanvasPad(props: {
       }
 
       if (isTypoStompRef.current) {
-        const segDist = Math.hypot(p.x - prev.x, p.y - prev.y);
         typoDistAccumulatorRef.current += segDist;
         const stepInterval = Math.max(18, activeStrokeWidthRef.current * 1.6);
         if (typoDistAccumulatorRef.current >= stepInterval) {
@@ -1556,7 +2268,7 @@ export function CanvasPad(props: {
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
           const dripBendX = p.x + (Math.random() - 0.5) * 8;
-          const endY = Math.min(canvas.height - 6, p.y + dripLength);
+          const endY = Math.min(canvas.height, p.y + dripLength);
           ctx.lineTo(dripBendX, endY);
           ctx.stroke();
 
@@ -1569,7 +2281,7 @@ export function CanvasPad(props: {
           // Detached heavy falling drop
           if (Math.random() < 0.5) {
             const dropDist = Math.floor(Math.random() * 25) + 12;
-            const dropY = Math.min(canvas.height - 6, endY + dropDist);
+            const dropY = Math.min(canvas.height, endY + dropDist);
             ctx.beginPath();
             ctx.arc(dripBendX, dropY, dripWidth * 0.9, 0, Math.PI * 2);
             ctx.fill();
@@ -1590,6 +2302,17 @@ export function CanvasPad(props: {
         ctx.moveTo(mirrorPrevX, prev.y);
         ctx.lineTo(mirrorCurrX, p.y);
         ctx.stroke();
+      }
+
+      if (isSpiderwebRef.current) {
+        drawSpiderwebThreads(
+          ctx,
+          p,
+          strokesRef.current,
+          currentPointsRef.current,
+          colorRef.current,
+          strokeWidthToUse
+        );
       }
 
       setHasDrawn(true);
@@ -1613,10 +2336,10 @@ export function CanvasPad(props: {
         const pullDist = Math.hypot(dx, dy);
 
         if (pullDist > 12) {
-          const flingPower = Math.min(320, pullDist * 2.2);
+          const flingPower = Math.min(1050, pullDist * 2.5);
           const angle = Math.atan2(-dy, -dx);
-          const targetX = Math.max(10, Math.min(canvas.width - 10, anchor.x + Math.cos(angle) * flingPower));
-          const targetY = Math.max(10, Math.min(canvas.height - 10, anchor.y + Math.sin(angle) * flingPower));
+          const targetX = Math.max(0, Math.min(canvas.width, anchor.x + Math.cos(angle) * flingPower));
+          const targetY = Math.max(0, Math.min(canvas.height, anchor.y + Math.sin(angle) * flingPower));
 
           const midX = (anchor.x + targetX) / 2;
           const curveDrop = Math.min(55, pullDist * 0.22);
@@ -1683,9 +2406,10 @@ export function CanvasPad(props: {
         const rawPos = getCanvasPos(
           evt,
           canvas,
+          containerRef.current,
           isUpsideDownRef.current,
           isSpinningRef.current,
-          spinStartTimeRef.current
+          spinAngleRef.current
         );
         delayedQueueRef.current.push({
           time: Date.now(),
@@ -1703,9 +2427,10 @@ export function CanvasPad(props: {
       const rawPos = getCanvasPos(
         evt,
         canvas,
+        containerRef.current,
         isUpsideDownRef.current,
         isSpinningRef.current,
-        spinStartTimeRef.current
+        spinAngleRef.current
       );
       let p = rawPos;
       if (isGlitchRef.current && teleportOffsetRef.current.x !== 0) {
@@ -1753,6 +2478,28 @@ export function CanvasPad(props: {
 
           setHasDrawn(true);
           onChangeRef.current?.();
+        } else if (isCubismRef.current && currentPointsRef.current.length >= 2) {
+          currentPointsRef.current = buildCubismPolygonPoints(
+            currentPointsRef.current,
+            strokesRef.current,
+            canvas.width,
+            canvas.height
+          );
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(currentPointsRef.current[0]!.x, currentPointsRef.current[0]!.y);
+          for (let i = 1; i < currentPointsRef.current.length; i++) {
+            ctx.lineTo(currentPointsRef.current[i]!.x, currentPointsRef.current[i]!.y);
+          }
+          ctx.closePath();
+          ctx.fillStyle = colorRef.current;
+          ctx.globalAlpha = 0.28;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = colorRef.current;
+          ctx.lineWidth = effectiveStrokeSize;
+          ctx.stroke();
+          ctx.restore();
         }
 
         const newStroke: StrokeEvent = {
@@ -1796,15 +2543,51 @@ export function CanvasPad(props: {
       } catch {}
     };
 
-    canvas.addEventListener("pointerdown", onDown);
+    const targetEl: HTMLElement = containerRef.current ?? canvas;
+    targetEl.addEventListener("pointerdown", onDown);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
 
     return () => {
-      canvas.removeEventListener("pointerdown", onDown);
+      targetEl.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
+  }, []);
+
+  const undo = () => {
+    if (disabledRef.current || isOneStrokeRef.current || isInputDelayRef.current || isTractorBeamRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const snap = undoStackRef.current.pop();
+    if (!snap) return;
+
+    ctx.putImageData(snap.imageData, 0, 0);
+    strokesRef.current = strokesRef.current.slice(0, snap.strokesLen);
+    if (maxInkRef.current > 0) {
+      inkRemainingRef.current = snap.inkRemaining;
+      setInkRemaining(snap.inkRemaining);
+    }
+    setCanUndo(undoStackRef.current.length > 0);
+    setHasDrawn(strokesRef.current.length > 0 || snap.hasDrawnBefore);
+    props.onChange?.();
+  };
+
+  // Support Ctrl+Z / Cmd+Z keyboard shortcut for Undo
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
+        const tag = (e.target as HTMLElement | null)?.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   const clear = () => {
@@ -1819,6 +2602,8 @@ export function CanvasPad(props: {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     setHasDrawn(false);
+    setCanUndo(false);
+    undoStackRef.current = [];
     strokeMovedRef.current = false;
     strokeStartRef.current = null;
     strokesRef.current = [];
@@ -1829,7 +2614,11 @@ export function CanvasPad(props: {
     iceVelRef.current = { vx: 0, vy: 0 };
     typoDistAccumulatorRef.current = 0;
     compactorStartTimeRef.current = Date.now();
-    setCompactorProgress(0);
+    updateCompactorDOM(0);
+    if (maxInkRef.current > 0) {
+      inkRemainingRef.current = maxInkRef.current;
+      setInkRemaining(maxInkRef.current);
+    }
     hasSubmittedRef.current = false;
     hideTetherDOM();
     props.onChange?.();
@@ -1840,6 +2629,8 @@ export function CanvasPad(props: {
     if (!canvas) return "";
     return canvas.toDataURL("image/png");
   };
+
+  const isEraserActive = color.toUpperCase() === "#FFFFFF";
 
   return (
     <div>
@@ -1878,19 +2669,26 @@ export function CanvasPad(props: {
 
       <div
         ref={containerRef}
-        className="canvasWrap"
+        className={`canvasWrap ${isSpinning ? "spinning-stage" : ""}`}
         style={{
           position: "relative",
-          overflow: isSpinning || isTrashCompactor ? "hidden" : "visible",
+          overflow: isTrashCompactor ? "hidden" : "visible",
+          touchAction: "none",
           aspectRatio: `${width} / ${height}`,
           maxWidth: width === height ? "min(320px, calc(100vh - 340px))" : undefined
         }}
       >
+        {isSpinning && (
+          <div className="spinning-stage-badge" aria-hidden="true">
+            <span>🎡</span>
+            <span>Draw inside the framed rotating sheet!</span>
+          </div>
+        )}
         <canvas
           ref={canvasRef}
           width={width}
           height={height}
-          className={`canvas ${isSpinning ? "trick-spinning-canvas" : ""}`}
+          className={`canvas ${isSpinning ? "spinning-canvas-framed" : ""}`}
           style={{
             ...(isBlind ? { opacity: 0.05, filter: "blur(20px)" } : {})
           }}
@@ -1965,6 +2763,95 @@ export function CanvasPad(props: {
           </div>
         )}
 
+        {/* Magnet Anomaly Pole Overlays (5 high-power poles across canvas) */}
+        {isMagnets && (
+          <>
+            {[
+              { left: "24%", top: "26%", label: "🧲 ATTRACT" },
+              { left: "76%", top: "26%", label: "🧲 REPEL" },
+              { left: "50%", top: "50%", label: "🧲 CORE PULL" },
+              { left: "24%", top: "74%", label: "🧲 REPEL" },
+              { left: "76%", top: "74%", label: "🧲 ATTRACT" }
+            ].map((pole, idx) => (
+              <div
+                key={idx}
+                ref={(el) => {
+                  magnetDomRefs.current[idx] = el;
+                }}
+                style={{
+                  position: "absolute",
+                  left: pole.left,
+                  top: pole.top,
+                  transform: "translate(-50%, -50%)",
+                  padding: idx === 2 ? "5px 12px" : "4px 9px",
+                  borderRadius: "999px",
+                  fontSize: idx === 2 ? "0.76rem" : "0.68rem",
+                  fontWeight: 800,
+                  color: "#fff",
+                  background: idx % 2 === 0 ? "rgba(225, 29, 72, 0.86)" : "rgba(2, 132, 199, 0.86)",
+                  border: `2px solid ${idx % 2 === 0 ? "#fda4af" : "#7dd3fc"}`,
+                  boxShadow: idx % 2 === 0 ? "0 0 24px rgba(244, 63, 94, 0.7)" : "0 0 24px rgba(56, 189, 248, 0.7)",
+                  pointerEvents: "none",
+                  zIndex: 7,
+                  whiteSpace: "nowrap",
+                  transition: "background 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease"
+                }}
+              >
+                {pole.label}
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* Wind Tunnel Indicator Pill */}
+        {isWindTunnel && (
+          <div
+            ref={windBannerDomRef}
+            style={{
+              position: "absolute",
+              top: "10px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "rgba(15, 23, 42, 0.85)",
+              color: "#38bdf8",
+              padding: "4px 14px",
+              borderRadius: "999px",
+              fontSize: "0.78rem",
+              fontWeight: 800,
+              pointerEvents: "none",
+              zIndex: 8,
+              border: "1px solid rgba(56, 189, 248, 0.45)",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              whiteSpace: "nowrap"
+            }}
+          >
+            🌬️ Wind Gust ➡️ (Wet ink drifts!)
+          </div>
+        )}
+
+        {/* Poltergeist Mischievous Floating Ghost Emoji (No text) */}
+        {isPoltergeist && (
+          <div
+            ref={poltergeistDomRef}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%) scale(1)",
+              opacity: 1,
+              fontSize: "2.4rem",
+              lineHeight: 1,
+              pointerEvents: "none",
+              zIndex: 9,
+              userSelect: "none",
+              filter: "drop-shadow(0 0 14px rgba(255, 255, 255, 0.85)) drop-shadow(0 0 6px #c084fc)",
+              transition: "transform 0.12s ease-out, filter 0.2s ease"
+            }}
+          >
+            👻
+          </div>
+        )}
+
         {/* Guillotine Chop top warning badge */}
         {isSplitHalves && (
           <div
@@ -2024,79 +2911,74 @@ export function CanvasPad(props: {
           />
         )}
 
-        {/* Trash Compactor Shrinking Walls Overlay */}
+        {/* Trash Compactor Shrinking Walls Overlay (Direct DOM refs for 60fps zero-rerender smoothness) */}
         {isTrashCompactor && (
           <>
-            {compactorProgress === 0 && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "10px",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  background: "rgba(239, 68, 68, 0.9)",
-                  border: "1px solid rgba(255, 255, 255, 0.3)",
-                  color: "#fff",
-                  padding: "4px 14px",
-                  borderRadius: "999px",
-                  fontSize: "0.78rem",
-                  fontWeight: 800,
-                  pointerEvents: "none",
-                  zIndex: 6,
-                  boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
-                  whiteSpace: "nowrap"
-                }}
-              >
-                ⚠️ Compactor starting in 5 seconds...
-              </div>
-            )}
+            <div
+              ref={compactorWarnRef}
+              style={{
+                position: "absolute",
+                top: "10px",
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "rgba(239, 68, 68, 0.9)",
+                border: "1px solid rgba(255, 255, 255, 0.3)",
+                color: "#fff",
+                padding: "4px 14px",
+                borderRadius: "999px",
+                fontSize: "0.78rem",
+                fontWeight: 800,
+                pointerEvents: "none",
+                zIndex: 6,
+                boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+                whiteSpace: "nowrap"
+              }}
+            >
+              ⚠️ Compactor starting in 5 seconds...
+            </div>
             <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 5, overflow: "hidden" }}>
               <div
+                ref={compactorTopRef}
                 style={{
                   position: "absolute",
                   top: 0,
                   left: 0,
                   right: 0,
-                  height: `${Math.min(48.5, compactorProgress * 48.5)}%`,
-                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)",
-                  borderBottom: compactorProgress > 0 ? "3px solid #ef4444" : "none",
-                  boxShadow: compactorProgress > 0 ? "0 2px 4px rgba(0,0,0,0.35)" : "none"
+                  height: "0%",
+                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)"
                 }}
               />
               <div
+                ref={compactorBottomRef}
                 style={{
                   position: "absolute",
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  height: `${Math.min(48.5, compactorProgress * 48.5)}%`,
-                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)",
-                  borderTop: compactorProgress > 0 ? "3px solid #ef4444" : "none",
-                  boxShadow: compactorProgress > 0 ? "0 -2px 4px rgba(0,0,0,0.35)" : "none"
+                  height: "0%",
+                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)"
                 }}
               />
               <div
+                ref={compactorLeftRef}
                 style={{
                   position: "absolute",
-                  top: `${Math.min(48.5, compactorProgress * 48.5)}%`,
-                  bottom: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  top: "0%",
+                  bottom: "0%",
                   left: 0,
-                  width: `${Math.min(48.5, compactorProgress * 48.5)}%`,
-                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)",
-                  borderRight: compactorProgress > 0 ? "3px solid #ef4444" : "none",
-                  boxShadow: compactorProgress > 0 ? "2px 0 4px rgba(0,0,0,0.35)" : "none"
+                  width: "0%",
+                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)"
                 }}
               />
               <div
+                ref={compactorRightRef}
                 style={{
                   position: "absolute",
-                  top: `${Math.min(48.5, compactorProgress * 48.5)}%`,
-                  bottom: `${Math.min(48.5, compactorProgress * 48.5)}%`,
+                  top: "0%",
+                  bottom: "0%",
                   right: 0,
-                  width: `${Math.min(48.5, compactorProgress * 48.5)}%`,
-                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)",
-                  borderLeft: compactorProgress > 0 ? "3px solid #ef4444" : "none",
-                  boxShadow: compactorProgress > 0 ? "-2px 0 4px rgba(0,0,0,0.35)" : "none"
+                  width: "0%",
+                  background: "repeating-linear-gradient(45deg, #1e293b, #1e293b 15px, #f59e0b 15px, #f59e0b 30px)"
                 }}
               />
             </div>
@@ -2176,17 +3058,32 @@ export function CanvasPad(props: {
               {currentColors.map((c) => (
                 <button
                   key={c}
-                  className={`color-btn ${color === c ? "active" : ""} ${c === "#FFFFFF" ? "white-btn" : ""}`}
+                  className={`color-btn ${color.toUpperCase() === c.toUpperCase() ? "active" : ""} ${c.toUpperCase() === "#FFFFFF" ? "white-btn" : ""}`}
                   style={{ backgroundColor: c }}
                   onClick={() => {
+                    if (c.toUpperCase() !== "#FFFFFF") {
+                      lastNonWhiteColorRef.current = c;
+                    }
                     setColor(c);
                     props.onColorChange?.(c);
                   }}
-                  title={c === "#FFFFFF" ? "Eraser" : "Color"}
+                  title={c.toUpperCase() === "#FFFFFF" ? "Eraser (White)" : `Color ${c}`}
                 />
               ))}
+              <button
+                type="button"
+                className={`tool-pill-btn ${isEraserActive ? "active" : ""}`}
+                onClick={() => {
+                  const next = isEraserActive ? lastNonWhiteColorRef.current : "#FFFFFF";
+                  setColor(next);
+                  props.onColorChange?.(next);
+                }}
+                title="Toggle Eraser"
+              >
+                🧹 {isEraserActive ? "Erasing" : "Eraser"}
+              </button>
             </div>
-            <div className="size-picker" style={{ opacity: isSizeLocked ? 0.8 : 1, display: "flex", alignItems: "center", gap: "6px" }}>
+            <div className="size-picker" style={{ opacity: isSizeLocked ? 0.85 : 1, display: "flex", alignItems: "center", gap: "8px" }}>
               <label>{isSizeLocked ? "🔒 Size:" : "Size:"}</label>
               <input
                 type="range"
@@ -2197,24 +3094,60 @@ export function CanvasPad(props: {
                 onChange={(e) => !isSizeLocked && setSize(Number(e.target.value))}
                 title={isSizeLocked ? "Brush size is locked for this trick" : "Adjust brush size"}
               />
-              {isSizeLocked && (
+              <span
+                className="brush-preview-dot"
+                title={`${activeStrokeWidth}px`}
+                style={{
+                  width: `${Math.max(4, Math.min(28, activeStrokeWidth * 0.7))}px`,
+                  height: `${Math.max(4, Math.min(28, activeStrokeWidth * 0.7))}px`,
+                  background: isEraserActive ? "#ffffff" : color,
+                  border: isEraserActive ? "2px dashed #64748b" : "1px solid rgba(255,255,255,0.5)"
+                }}
+              />
+              {isSizeLocked ? (
                 <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#f59e0b", whiteSpace: "nowrap" }}>
                   {props.trick === "large_brush"
                     ? "35px (Mega)"
                     : props.trick === "pixel_art"
-                    ? "32px (Chunky Pixel Grid)"
-                    : "🎲 Dynamic (Morphing)"}
+                    ? "32px (Pixel)"
+                    : "🎲 Morphing"}
+                </span>
+              ) : (
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--muted)", minWidth: "30px" }}>
+                  {size}px
                 </span>
               )}
             </div>
           </div>
 
-          <div className="row space" style={{ marginTop: "16px" }}>
-            <button className="btn" onClick={clear}>
-              Clear
-            </button>
+          <div className="row space" style={{ marginTop: "14px" }}>
+            <div className="row" style={{ gap: "8px" }}>
+              {!isOneStroke && !isInputDelay && !isTractorBeam && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={undo}
+                  disabled={!canUndo}
+                  title="Undo last stroke (Ctrl+Z)"
+                  style={{ padding: "8px 14px", fontSize: "0.9rem" }}
+                >
+                  ↩️ Undo
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn"
+                onClick={clear}
+                disabled={!hasDrawn && !canUndo}
+                style={{ padding: "8px 14px", fontSize: "0.9rem" }}
+              >
+                🗑️ Clear
+              </button>
+            </div>
 
-            <div className="muted">{hasDrawn ? "Nice." : "Draw your line!"}</div>
+            <div className="muted" style={{ fontSize: "0.9rem", fontWeight: 600 }}>
+              {hasDrawn ? "✨ Looking good!" : "✏️ Draw on the canvas!"}
+            </div>
 
             <button
               className="btn primary"

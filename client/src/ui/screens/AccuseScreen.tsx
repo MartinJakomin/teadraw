@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { RoomState } from "../../types";
 import { fakeArtistArtistIds } from "../fakeArtistOrder";
 import { buildAccusedStrokesOverlay, parseHexColor } from "../accuseStrokeHighlight";
@@ -33,6 +33,26 @@ export function AccuseScreen(props: {
   const highlightId = selectedId || hoverId;
   const highlightPlayer = highlightId ? artists.find((p) => p.id === highlightId) : undefined;
   const strokeLog = props.fake.strokeLog;
+
+  const hasAutoSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (!props.room.endTime || hasAutoSubmittedRef.current || isQM || spectating || hasVoted) return;
+    const check = setInterval(() => {
+      const remaining = props.room.endTime! - Date.now();
+      if (remaining <= 0 && !hasAutoSubmittedRef.current) {
+        hasAutoSubmittedRef.current = true;
+        clearInterval(check);
+        if (selectedId) {
+          props.onVote(selectedId);
+        } else {
+          const candidates = artists.filter((p) => p.id !== props.me.id);
+          const pick = candidates[Math.floor(Math.random() * candidates.length)];
+          if (pick) props.onVote(pick.id);
+        }
+      }
+    }, 500);
+    return () => clearInterval(check);
+  }, [props.room.endTime, isQM, spectating, hasVoted, selectedId, artists, props.me.id, props.onVote]);
 
   useEffect(() => {
     let cancelled = false;

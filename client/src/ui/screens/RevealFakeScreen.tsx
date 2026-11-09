@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import type { RoomState, PlayerId } from "../../types";
 import { downloadImageDataUrl } from "../downloadImage";
 
@@ -9,6 +9,21 @@ export function RevealFakeScreen(props: {
   isHost: boolean;
   onNext: () => void;
 }) {
+  const [revealTimeLeft, setRevealTimeLeft] = useState<number | null>(null);
+  useEffect(() => {
+    if (!props.room.endTime) {
+      setRevealTimeLeft(null);
+      return;
+    }
+    const update = () => {
+      const rem = Math.max(0, Math.ceil((props.room.endTime! - Date.now()) / 1000));
+      setRevealTimeLeft(rem);
+    };
+    update();
+    const id = setInterval(update, 250);
+    return () => clearInterval(id);
+  }, [props.room.endTime, props.room.round]);
+
   const fakeArtist = props.room.players.find(p => p.id === props.fake.fakeArtistId);
   const qm = props.room.players.find(p => p.id === props.fake.questionMasterId);
   
@@ -50,8 +65,13 @@ export function RevealFakeScreen(props: {
           {props.isHost && !props.me.isSpectator ? (
             <button className="btn primary" onClick={props.onNext}>
               {props.room.round >= props.room.totalRounds ? "Finish Game" : "Next Round"}
+              {revealTimeLeft !== null ? ` (${revealTimeLeft}s)` : ""}
             </button>
-          ) : null}
+          ) : (
+            <div className="muted small">
+              {revealTimeLeft !== null ? `⏱️ Next in ${revealTimeLeft}s…` : "Waiting for host…"}
+            </div>
+          )}
         </div>
 
         <div className="reveal-content">
