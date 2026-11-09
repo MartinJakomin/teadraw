@@ -24,20 +24,23 @@ export function TitleScreen(props: { onContinue: () => void }) {
             maxHeight: "42vh",
             objectFit: "contain",
             marginBottom: "clamp(1.25rem, 3vh, 2rem)",
-            filter: "drop-shadow(0 0 40px rgba(139, 92, 246, 0.45))"
+            filter: "brightness(1.18) contrast(1.08) drop-shadow(0 0 45px rgba(168, 85, 247, 0.65)) drop-shadow(0 0 15px rgba(255, 255, 255, 0.35))"
           }}
         />
         <button
           className="btn primary"
           style={{
-            padding: "clamp(12px, 1.8vh, 16px) clamp(36px, 5vw, 60px)",
-            fontSize: "clamp(1.05rem, 2vh, 1.3rem)",
+            padding: "clamp(12px, 1.8vh, 16px) clamp(40px, 6vw, 68px)",
+            fontSize: "clamp(1.1rem, 2.2vh, 1.35rem)",
+            fontWeight: 800,
             borderRadius: "50px",
-            alignSelf: "center"
+            alignSelf: "center",
+            letterSpacing: "0.04em",
+            boxShadow: "0 8px 30px rgba(139, 92, 246, 0.55)"
           }}
           onClick={props.onContinue}
         >
-          Play TeaDraw →
+          Enter
         </button>
       </div>
     </div>

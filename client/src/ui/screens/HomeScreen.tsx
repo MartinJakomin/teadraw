@@ -42,7 +42,7 @@ export function HomeScreen(props: {
             width: "100%",
             height: "auto",
             marginBottom: "clamp(0.6rem, 1.2vh, 1rem)",
-            filter: "drop-shadow(0 8px 30px rgba(99, 102, 241, 0.4))"
+            filter: "brightness(1.15) contrast(1.06) drop-shadow(0 8px 32px rgba(129, 140, 248, 0.55)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.25))"
           }}
         />
 
