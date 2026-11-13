@@ -497,11 +497,46 @@ io.on("connection", (socket) => {
       // Check for existing playerId or a disconnected player with the exact same name
       const cleanName = String(name ?? "").trim().slice(0, 18);
       let existingId = playerId && room.playersById.has(playerId) ? playerId : undefined;
+
+      // Check if current socket is already associated with a player in this room
+      if (!existingId && socket.data.playerId && room.playersById.has(socket.data.playerId)) {
+        existingId = socket.data.playerId;
+      }
+
+      // Check if another player in this room is already mapped to this socket ID
+      if (!existingId) {
+        const playerOnSameSocket = listPlayers(room).find((p) => p.socketId === socket.id);
+        if (playerOnSameSocket) {
+          existingId = playerOnSameSocket.id;
+        }
+      }
+
+      // Match offline human player with the same name
       if (!existingId && cleanName) {
         const offlineSameName = listPlayers(room).find(
           (p) => !p.isBot && !p.connected && p.name.toLowerCase() === cleanName.toLowerCase()
         );
         if (offlineSameName) existingId = offlineSameName.id;
+      }
+
+      // In lobby phase, prevent duplicate player creation if a player with this name already exists
+      if (!existingId && cleanName && room.phase === "lobby") {
+        const existingPlayerSameName = listPlayers(room).find(
+          (p) => !p.isBot && p.name.toLowerCase() === cleanName.toLowerCase()
+        );
+        if (existingPlayerSameName) {
+          if (existingPlayerSameName.socketId === socket.id || !existingPlayerSameName.connected) {
+            existingId = existingPlayerSameName.id;
+          } else {
+            const otherSocket = io.sockets.sockets.get(existingPlayerSameName.socketId);
+            if (otherSocket && otherSocket.connected) {
+              ack?.({ ok: false, error: "A player with this name is already in the room. Please choose another name." });
+              return;
+            } else {
+              existingId = existingPlayerSameName.id;
+            }
+          }
+        }
       }
 
       if (existingId && room.playersById.has(existingId)) {

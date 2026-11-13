@@ -14,7 +14,7 @@ export function TitleScreen(props: { onContinue: () => void }) {
   }, [props]);
 
   return (
-    <div className="page center" style={{ height: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
+    <div className="page center" style={{ minHeight: "100dvh", height: "100dvh", background: "var(--bg)", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center" }}>
       <div className="scale-in" style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "0 1.5rem" }}>
         <img
           src={logoUrl}

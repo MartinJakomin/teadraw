@@ -481,13 +481,11 @@ export function toPublicState(room: Room, viewerId?: PlayerId): RoomStatePublic 
 
     const viewer = viewerId ? room.playersById.get(viewerId) : undefined;
     const hideSecretWord =
-      viewerId !== undefined &&
       isPreReveal &&
-      (viewerId === room.fakeArtistId || Boolean(viewer?.isSpectator));
+      (!viewerId || viewerId === room.fakeArtistId || Boolean(viewer?.isSpectator));
     const hideFakeArtistIdentity =
-      viewerId !== undefined &&
       isPreCatch &&
-      viewerId !== room.fakeArtistId;
+      (!viewerId || viewerId !== room.fakeArtistId);
 
     const fa: NonNullable<RoomStatePublic["fakeArtist"]> = {
       questionMasterId: room.questionMasterId,
@@ -617,6 +615,19 @@ export function ensureLobby(room: Room) {
   room.correctPromptsGuessed.clear();
   room.fakePromptsFooledBy.clear();
   room.artistRealVotes.clear();
+  room.questionMasterId = undefined;
+  room.fakeArtistId = undefined;
+  room.category = undefined;
+  room.word = undefined;
+  room.activePlayerId = undefined;
+  room.turnNumber = 0;
+  room.sharedDrawingUrl = undefined;
+  room.fakeArtistStrokeLog = [];
+  room.votedForId.clear();
+  room.isFakeArtistCaught = undefined;
+  room.fakeArtistGuess = undefined;
+  room.fakeArtistWinner = undefined;
+  room.pointsDeltaByPlayer.clear();
   for (const p of room.playersById.values()) {
     p.avatarUrl = undefined;
   }

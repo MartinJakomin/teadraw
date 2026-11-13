@@ -520,7 +520,8 @@ select option {
 /* Canvas Sizing & Pads */
 .canvasWrap {
   width: 100%;
-  max-width: min(940px, calc((100vh - 210px) * (900 / 550)));
+  max-width: min(940px, calc((100dvh - 240px) * (900 / 550)));
+  aspect-ratio: 900 / 550;
   border-radius: clamp(10px, 1.4vw, 16px);
   overflow: hidden;
   border: clamp(2px, 0.3vw, 3.5px) solid rgba(255, 255, 255, 0.08);
@@ -539,9 +540,9 @@ select option {
 }
 
 .img {
-  width: 100%;
-  max-width: min(820px, calc((100vh - 280px) * (900 / 550)));
-  max-height: min(44vh, 420px);
+  width: auto;
+  max-width: 100%;
+  max-height: min(34vh, 320px);
   aspect-ratio: 900 / 550;
   object-fit: contain;
   display: block;
@@ -641,17 +642,26 @@ select option {
 .layout-split {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100dvh;
   width: 100%;
+  overflow: hidden;
 }
 
 .layout-main {
   flex: 1;
-  display: grid;
-  place-items: center;
-  padding: clamp(8px, 1.5vw, 24px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  justify-content: safe center;
+  padding: clamp(6px, 1.2vw, 16px);
   min-width: 0;
   overflow-y: auto;
-  max-height: 100vh;
+  overflow-x: hidden;
+  height: 100%;
+  max-height: 100dvh;
+  box-sizing: border-box;
 }
 
 .sidebar {
@@ -664,6 +674,7 @@ select option {
   gap: clamp(0.5rem, 1vh, 1rem);
   backdrop-filter: blur(25px);
   height: 100vh;
+  height: 100dvh;
   box-shadow: -10px 0 30px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
 }
@@ -1405,8 +1416,8 @@ select option {
 }
 
 .reveal-img {
-  max-height: min(44vh, 420px);
-  max-width: min(780px, calc((100vh - 280px) * (900 / 550)));
+  max-height: min(34vh, 320px);
+  max-width: 100%;
   aspect-ratio: 900 / 550;
   object-fit: contain;
   border-radius: 14px;
@@ -2164,6 +2175,44 @@ select option {
   will-change: transform;
 }
 
+.spinning-orientation-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.spinning-orientation-corner {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1.5px solid #a855f7;
+  color: #f8fafc;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.5),
+    0 0 12px rgba(168, 85, 247, 0.45);
+  user-select: none;
+}
+
+.spinning-orientation-arrow {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
 .tool-pill-btn {
   display: inline-flex;
   align-items: center;
@@ -2512,6 +2561,9 @@ select option {
 @media (max-width: 900px) {
   .layout-split {
     flex-direction: column;
+    min-height: 100dvh;
+    height: auto;
+    overflow-y: auto;
   }
 
   .sidebar {
@@ -2524,7 +2576,42 @@ select option {
 
   .layout-main {
     order: 1;
+    height: auto;
     max-height: none;
+    overflow-y: visible;
+  }
+}
+
+/* Compact screens & laptops: prevent hidden elements and unwanted vertical scrolling */
+@media (max-height: 720px) {
+  .layout-main {
+    padding: 4px 8px;
+  }
+
+  .card {
+    padding: 8px 12px;
+  }
+
+  .canvasWrap {
+    max-width: min(940px, calc((100dvh - 190px) * (900 / 550)));
+  }
+
+  .img,
+  .reveal-img {
+    max-height: min(28vh, 220px);
+  }
+
+  .prompt {
+    padding: 4px 10px;
+    margin: 3px 0;
+  }
+
+  .promptText {
+    font-size: 1.15rem;
+  }
+
+  .option {
+    padding: 6px 10px;
   }
 }
 

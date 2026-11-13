@@ -71,6 +71,9 @@ export function App() {
   const [error, setError] = useState<string>("");
   const [socketConnected, setSocketConnected] = useState(socket.connected);
   const [inPractice, setInPractice] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const joinInFlightRef = useRef(false);
+  const hasEverDisconnectedRef = useRef(false);
 
   // Use refs so the reconnect handler always sees current values
   const roomCodeRef = useRef(roomCode);
@@ -111,10 +114,14 @@ export function App() {
       setRoomCode(codeFromUrl);
       save(LS.roomCode, codeFromUrl);
       const savedName = load(LS.name);
-      if (savedName && savedName.trim().length > 0) {
+      if (savedName && savedName.trim().length > 0 && !joinInFlightRef.current) {
         setShowTitle(false);
         const existingPid = load(LS.playerId) || undefined;
+        joinInFlightRef.current = true;
+        setIsJoining(true);
         socket.emit("room:join", { roomCode: codeFromUrl, name: savedName.trim(), playerId: existingPid }, (resp: any) => {
+          joinInFlightRef.current = false;
+          setIsJoining(false);
           if (resp?.ok) {
             applyJoinResponse(resp);
           } else if (resp?.error) {
@@ -129,8 +136,12 @@ export function App() {
     const savedCode = load(LS.roomCode);
     const savedPid = load(LS.playerId);
     const savedName = load(LS.name);
-    if (savedCode && savedCode.length === 4 && savedPid && savedName.trim().length > 0) {
+    if (savedCode && savedCode.length === 4 && savedPid && savedName.trim().length > 0 && !joinInFlightRef.current) {
+      joinInFlightRef.current = true;
+      setIsJoining(true);
       socket.emit("room:join", { roomCode: savedCode, name: savedName.trim(), playerId: savedPid }, (resp: any) => {
+        joinInFlightRef.current = false;
+        setIsJoining(false);
         if (resp?.ok) {
           applyJoinResponse(resp);
         } else {
@@ -164,8 +175,10 @@ export function App() {
       const code = roomCodeRef.current;
       const pid = playerIdRef.current;
       const n = nameRef.current;
-      if (code && pid && n.trim().length > 0) {
+      if (code && pid && n.trim().length > 0 && !joinInFlightRef.current) {
+        joinInFlightRef.current = true;
         socket.emit("room:join", { roomCode: code, name: n.trim(), playerId: pid }, (resp: any) => {
+          joinInFlightRef.current = false;
           if (resp?.ok) {
             applyJoinResponse(resp);
           } else if (roomRef.current) {
@@ -178,11 +191,15 @@ export function App() {
 
     const onConnect = () => {
       setSocketConnected(true);
-      attemptRejoin();
+      // Only auto-rejoin on connect if we experienced a previous socket disconnect
+      if (hasEverDisconnectedRef.current) {
+        attemptRejoin();
+      }
     };
 
     const onDisconnect = () => {
       setSocketConnected(false);
+      hasEverDisconnectedRef.current = true;
     };
 
     const onKicked = () => {
@@ -284,17 +301,28 @@ export function App() {
         roomCode={roomCode}
         setRoomCode={setRoomCode}
         error={error}
+        isJoining={isJoining}
         onCreate={() => {
+          if (isJoining || joinInFlightRef.current) return;
+          setIsJoining(true);
+          joinInFlightRef.current = true;
           setError("");
           socket.emit("room:create", { name }, (resp: any) => {
+            setIsJoining(false);
+            joinInFlightRef.current = false;
             if (!resp?.ok) return setError(resp?.error ?? "Failed to create room");
             setRoomCode(resp.roomCode);
             setPlayerId(resp.playerId);
           });
         }}
         onJoin={() => {
+          if (isJoining || joinInFlightRef.current) return;
+          setIsJoining(true);
+          joinInFlightRef.current = true;
           setError("");
           socket.emit("room:join", { roomCode, name, playerId: playerId || undefined }, (resp: any) => {
+            setIsJoining(false);
+            joinInFlightRef.current = false;
             if (!resp?.ok) return setError(resp?.error ?? "Failed to join room");
             applyJoinResponse(resp);
           });

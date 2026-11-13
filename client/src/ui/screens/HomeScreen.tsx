@@ -9,6 +9,7 @@ export function HomeScreen(props: {
   roomCode: string;
   setRoomCode: (v: string) => void;
   error: string;
+  isJoining?: boolean;
   onCreate: () => void;
   onJoin: () => void;
   onPractice: () => void;
@@ -54,7 +55,7 @@ export function HomeScreen(props: {
               value={props.name}
               onChange={(e) => props.setName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && props.name.trim()) {
+                if (e.key === "Enter" && !props.isJoining && props.name.trim()) {
                   if (props.roomCode.trim().length === 4) {
                     props.onJoin();
                   } else {
@@ -78,12 +79,13 @@ export function HomeScreen(props: {
               className="btn primary" 
               style={{ width: "100%", marginTop: "0.6rem", padding: "12px 24px", fontWeight: 800, fontSize: "1.05rem", borderRadius: "14px" }} 
               onClick={() => {
+                if (props.isJoining) return;
                 console.log(`Creating room... Version: ${serverVersion}`);
                 props.onCreate();
               }} 
-              disabled={!props.name.trim()}
+              disabled={!props.name.trim() || Boolean(props.isJoining)}
             >
-              Create Room
+              {props.isJoining ? "Creating Room…" : "Create Room"}
             </button>
           </div>
 
@@ -98,13 +100,13 @@ export function HomeScreen(props: {
                 value={props.roomCode}
                 onChange={(e) => props.setRoomCode(e.target.value.toUpperCase().slice(0, 4))}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && props.name.trim() && props.roomCode.trim().length === 4) {
+                  if (e.key === "Enter" && !props.isJoining && props.name.trim() && props.roomCode.trim().length === 4) {
                     props.onJoin();
                   }
                 }}
                 placeholder="ABCD"
                 maxLength={4}
-                disabled={!props.name.trim()}
+                disabled={!props.name.trim() || Boolean(props.isJoining)}
               />
             </div>
 
@@ -112,12 +114,13 @@ export function HomeScreen(props: {
               className="btn"
               style={{ width: "100%", marginTop: "0.6rem", padding: "12px 24px", fontWeight: 800, fontSize: "1.05rem", borderRadius: "14px" }}
               onClick={() => {
+                if (props.isJoining) return;
                 console.log(`Joining room ${props.roomCode}... Version: ${serverVersion}`);
                 props.onJoin();
               }}
-              disabled={!props.name.trim() || props.roomCode.trim().length !== 4}
+              disabled={!props.name.trim() || props.roomCode.trim().length !== 4 || Boolean(props.isJoining)}
             >
-              Join Room
+              {props.isJoining ? "Joining Room…" : "Join Room"}
             </button>
           </div>
         </div>

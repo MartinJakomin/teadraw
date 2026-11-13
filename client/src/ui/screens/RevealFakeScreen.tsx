@@ -93,7 +93,7 @@ export function RevealFakeScreen(props: {
                  )}
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem" }}>
                  <div className="reveal-sidebar" style={{ height: "fit-content" }}>
                     <h3 style={{ marginBottom: "0.5rem" }}>Round Details</h3>
                     <div className="list">

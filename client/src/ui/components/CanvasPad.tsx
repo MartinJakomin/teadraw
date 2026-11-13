@@ -144,6 +144,7 @@ export function CanvasPad(props: {
   // Spinning canvas reference timestamp & live angle (radians)
   const spinStartTimeRef = useRef(Date.now());
   const spinAngleRef = useRef<number>(0);
+  const spinningOverlayRef = useRef<HTMLDivElement | null>(null);
 
   // Trash compactor start timestamp & direct DOM refs (zero 60fps React re-renders)
   const compactorStartTimeRef = useRef(Date.now());
@@ -1430,9 +1431,10 @@ export function CanvasPad(props: {
   // Real-time animation loop (only runs when an animated trick is active)
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!isSpinning && canvas) {
+    if (!isSpinning) {
       spinAngleRef.current = 0;
-      canvas.style.transform = "";
+      if (canvas) canvas.style.transform = "";
+      if (spinningOverlayRef.current) spinningOverlayRef.current.style.transform = "";
     }
 
     const needsLoop = isSpinning || isTrashCompactor || isTractorBeam || isInputDelay || isMagnets || isWindTunnel || isPoltergeist;
@@ -1450,7 +1452,11 @@ export function CanvasPad(props: {
         const angle = (elapsed / SPIN_PERIOD_MS) * 2 * Math.PI;
         spinAngleRef.current = angle;
         const deg = (angle * 180) / Math.PI;
-        c.style.transform = `rotate(${deg.toFixed(2)}deg) scale(${SPIN_SCALE})`;
+        const transformStr = `rotate(${deg.toFixed(2)}deg) scale(${SPIN_SCALE})`;
+        c.style.transform = transformStr;
+        if (spinningOverlayRef.current) {
+          spinningOverlayRef.current.style.transform = transformStr;
+        }
       }
 
       // Magnet Anomaly: Update all 5 high-power magnetic pole indicators directly in DOM every frame (10s polarity cycle)
@@ -1888,7 +1894,11 @@ export function CanvasPad(props: {
     };
 
     animId = requestAnimationFrame(renderLoop);
-    return () => cancelAnimationFrame(animId);
+    return () => {
+      cancelAnimationFrame(animId);
+      if (canvasRef.current) canvasRef.current.style.transform = "";
+      if (spinningOverlayRef.current) spinningOverlayRef.current.style.transform = "";
+    };
   }, [isSpinning, isTrashCompactor, isTractorBeam, isInputDelay, isMagnets, isWindTunnel, isPoltergeist]);
 
   // Main Pointer Down / Move / Up Handling
@@ -2693,6 +2703,20 @@ export function CanvasPad(props: {
             ...(isBlind ? { opacity: 0.05, filter: "blur(20px)" } : {})
           }}
         />
+
+        {/* Spinning Canvas Orientation UP Indicator */}
+        {isSpinning && (
+          <div
+            ref={spinningOverlayRef}
+            className="spinning-orientation-overlay"
+            aria-hidden="true"
+          >
+            <div className="spinning-orientation-corner">
+              <span className="spinning-orientation-arrow">⬆️</span>
+              <span>UP</span>
+            </div>
+          </div>
+        )}
 
         {/* Alien Vaporizer Beam & UFO DOM */}
         {isTractorBeam && (
